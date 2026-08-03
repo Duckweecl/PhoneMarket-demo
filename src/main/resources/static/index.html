@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手机市场经营模拟</title>
+    <link rel="stylesheet" href="/styles.css?v=20260803-1455">
+</head>
+<body>
+<main class="page">
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">PHONE MARKET</p>
+            <h1>手机市场经营模拟</h1>
+            <p id="loginText" class="muted">正在登录……</p>
+        </div>
+        <div class="top-actions">
+            <span class="room-pill">房间 <strong id="roomText">未选择</strong></span>
+            <button id="refreshButton" class="secondary" disabled>刷新</button>
+        </div>
+    </header>
+
+    <section class="panel room-controls">
+        <button id="createButton" disabled>创建房间</button>
+        <label>
+            房间 ID
+            <input id="gameIdInput" type="number" min="1" placeholder="输入房间 ID">
+        </label>
+        <button id="joinButton" disabled>加入房间</button>
+        <button id="startButton" disabled>开始游戏</button>
+    </section>
+
+    <p id="message" class="message"></p>
+
+    <section id="gameArea" class="hidden">
+        <div id="processingBanner" class="processing-banner hidden">
+            <span class="spinner"></span>
+            <div>
+                <strong>市场正在结算</strong>
+                <p>所有玩家已经提交。结算完成后页面会自动切换到新回合。</p>
+            </div>
+        </div>
+
+        <div id="finalBanner" class="final-banner hidden"></div>
+
+        <nav class="tabs" aria-label="游戏页面">
+            <button class="tab-button active" data-tab="market">当前市场</button>
+            <button class="tab-button" data-tab="research">研发</button>
+            <button class="tab-button" data-tab="operation">经营</button>
+        </nav>
+
+        <section id="marketTab" class="tab-page">
+            <div id="summaryCards" class="summary-grid"></div>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">RANKING</p>
+                        <h2>玩家状态与实时排名</h2>
+                    </div>
+                    <span class="muted">排名仅按累计结算利润；利润相同并列</span>
+                </div>
+                <div id="playerFinance"></div>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">CONSUMER MARKET</p>
+                        <h2>消费者市场</h2>
+                    </div>
+                    <span class="muted">品牌占比按当前各人群持有人数计算</span>
+                </div>
+                <div id="consumerMarket"></div>
+            </section>
+
+            <section class="panel">
+                <h2>本回合明星</h2>
+                <div id="starInfo"></div>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">COMPONENT SUPPLY</p>
+                        <h2>零部件市场</h2>
+                    </div>
+                    <span class="muted">价格为本回合提交方案时可见的采购价格</span>
+                </div>
+                <div id="componentTable" class="component-market-grid"></div>
+            </section>
+
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">LAST ROUND</p>
+                        <h2>上一回合结算</h2>
+                    </div>
+                </div>
+                <div id="previousRound"></div>
+            </section>
+
+            <section class="panel compact-panel">
+                <details>
+                    <summary>完整返回 JSON</summary>
+                    <pre id="rawJson"></pre>
+                </details>
+            </section>
+        </section>
+
+        <section id="researchTab" class="tab-page hidden">
+            <section class="panel">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">PRODUCT DESIGN</p>
+                        <h2>研发本回合手机</h2>
+                    </div>
+                    <span class="muted">下拉菜单显示方案名称与本回合采购价格</span>
+                </div>
+
+                <label class="field">
+                    手机型号名称
+                    <input id="modelName" type="text" maxlength="50" placeholder="例如 Nova X">
+                </label>
+
+                <div id="componentSelectors" class="selector-grid"></div>
+            </section>
+
+            <section class="panel">
+                <h2>产品成本预估</h2>
+                <div class="metric-grid">
+                    <div class="metric"><span>六种零部件成本</span><strong id="componentUnitCost">0</strong></div>
+                    <div class="metric"><span>单台装配费</span><strong id="assemblyUnitCost">500</strong></div>
+                    <div class="metric"><span>预计单台成本</span><strong id="phoneUnitCost">500</strong></div>
+                    <div class="metric"><span>手机 grade</span><strong id="totalGrade">6</strong></div>
+                </div>
+                <div class="page-actions">
+                    <button data-go-tab="market" class="secondary">返回市场</button>
+                    <button data-go-tab="operation">下一步：经营</button>
+                </div>
+            </section>
+        </section>
+
+        <section id="operationTab" class="tab-page hidden">
+            <section class="panel">
+                <h2>消费者预算</h2>
+                <div id="majorBudgetCards" class="summary-grid"></div>
+            </section>
+
+            <section class="panel">
+                <h2>生产与销售</h2>
+                <div class="form-grid">
+                    <label class="field">生产数量<input id="productionQuantity" type="number" min="0" step="1" value="0"></label>
+                    <label class="field">手机售价<input id="salePrice" type="number" min="1" step="1" value="1"></label>
+                    <label class="field">明星秘密报价<input id="starBid" type="number" min="0" step="1" value="0"></label>
+                </div>
+                <p class="hint">消费者只考虑售价不超过该人群平均预算 125% 的手机。</p>
+            </section>
+
+            <section class="panel">
+                <h2>所选零部件供货情况</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>部件</th><th>方案</th><th>当前供货</th><th>计划使用</th><th>预计剩余</th></tr></thead>
+                        <tbody id="selectedComponentSupplyTable"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>基础宣传</h2>
+                <p class="hint">每种宣传均面向全体消费者，并提供 +0.20 宣传加成。</p>
+                <div id="advertisingOptions" class="checkbox-list"></div>
+            </section>
+
+            <section class="panel">
+                <h2>预计资金</h2>
+                <div class="rule-notice">
+                    <strong>资金规则</strong>
+                    <p>计划支出不得超过当前现金与剩余贷款额度之和。实际零部件价格上涨造成的额外缺口按 25% 利息处理。</p>
+                    <p>普通贷款按 5% 计息，销售与未售回收收入到账后自动偿还全部可偿还贷款。</p>
+                </div>
+                <div class="table-wrap">
+                    <table><tbody>
+                    <tr><th>预计单台手机成本</th><td id="operationUnitCost">0</td></tr>
+                    <tr><th>预计生产支出</th><td id="estimatedProductionCost">0</td></tr>
+                    <tr><th>基础宣传支出</th><td id="estimatedAdCost">0</td></tr>
+                    <tr><th>明星报价（最高可能支出）</th><td id="estimatedStarCost">0</td></tr>
+                    <tr><th>最大支出范围</th><td id="maximumSpendingLimit">-</td></tr>
+                    <tr><th>预计总支出</th><td id="estimatedTotalCost">0</td></tr>
+                    <tr><th>预计支出后现金</th><td id="estimatedCashAfter">-</td></tr>
+                    <tr><th>预计剩余可支配额度</th><td id="estimatedAvailableAfter">-</td></tr>
+                    </tbody></table>
+                </div>
+                <p id="affordabilityWarning" class="warning hidden"></p>
+                <div class="page-actions">
+                    <button data-go-tab="research" class="secondary">上一步：研发</button>
+                    <button id="submitActionButton">最终提交</button>
+                </div>
+            </section>
+        </section>
+    </section>
+</main>
+<script src="/app.js?v=20260803-1455"></script>
+</body>
+</html>

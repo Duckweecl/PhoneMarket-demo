@@ -1,0 +1,387 @@
+:root {
+    --bg: #f4f7fb;
+    --panel: #ffffff;
+    --text: #172033;
+    --muted: #667085;
+    --line: #dbe2ea;
+    --primary: #1f3a5f;
+    --primary-soft: #eaf1f8;
+    --positive: #07883f;
+    --positive-bg: #eaf8ef;
+    --negative: #c4322b;
+    --negative-bg: #fff0ee;
+    --warning: #a15c00;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: Inter, "Microsoft YaHei", Arial, sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at top right, #eef5ff 0, transparent 34%), var(--bg);
+}
+button, input, select { font: inherit; }
+button {
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 16px;
+    background: var(--primary);
+    color: #fff;
+    cursor: pointer;
+    transition: transform .15s ease, opacity .15s ease;
+}
+button:hover:not(:disabled) { transform: translateY(-1px); }
+button.secondary { background: #64748b; }
+button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+input, select {
+    width: 100%;
+    border: 1px solid #b9c5d3;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fff;
+}
+input:focus, select:focus { outline: 2px solid #bdd4ec; border-color: #6d93bb; }
+
+.page { width: min(1240px, calc(100% - 32px)); margin: 24px auto 64px; }
+.topbar { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 16px; }
+.topbar h1 { margin: 0 0 5px; font-size: 30px; }
+.top-actions { display: flex; gap: 10px; align-items: center; }
+.room-pill { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; }
+.eyebrow { margin: 0 0 5px; font-size: 11px; letter-spacing: .14em; font-weight: 800; color: #52708f; }
+.muted, .hint, .empty-text { color: var(--muted); }
+.hint { font-size: 14px; }
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 8px 24px rgba(31, 58, 95, .045);
+}
+.compact-panel { padding: 14px 20px; }
+.room-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.room-controls label, .field { display: grid; gap: 7px; }
+.room-controls label { min-width: 220px; }
+.message { min-height: 24px; margin: 8px 0; }
+.message.error, .warning, .negative { color: var(--negative) !important; }
+.message.success, .positive { color: var(--positive) !important; }
+
+.processing-banner, .final-banner {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    border-radius: 13px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+}
+.processing-banner { background: #fff7e7; border: 1px solid #f4c46c; color: #7d4a00; }
+.processing-banner p, .final-banner p { margin: 4px 0 0; }
+.final-banner { display: block; background: #eaf8ef; border: 1px solid #9ed8b3; }
+.final-banner h2 { margin: 0 0 8px; }
+.spinner { width: 22px; height: 22px; border: 3px solid #f3d39a; border-top-color: #9b6200; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab-button { background: #d9e2ec; color: #34465a; }
+.tab-button.active { background: var(--primary); color: #fff; }
+.hidden { display: none !important; }
+
+.section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 14px; }
+h2, h3, h4, p { margin-top: 0; }
+h2 { margin-bottom: 12px; font-size: 21px; }
+h3 { margin-bottom: 8px; }
+
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.summary-card, .metric {
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    padding: 14px;
+    background: #fff;
+}
+.summary-card span, .metric span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+.summary-card strong, .metric strong { font-size: 20px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+.player-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 13px; }
+.player-card { border: 1px solid var(--line); border-radius: 12px; padding: 15px; background: #fbfdff; }
+.current-player-card { border: 2px solid var(--primary); background: #f7fbff; }
+.player-card-title { display: flex; justify-content: space-between; align-items: center; font-size: 17px; font-weight: 700; }
+.rank-badge { display: inline-grid; place-items: center; min-width: 35px; padding: 4px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 13px; }
+.self-badge, .private-badge, .winner-badge { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
+.self-badge { background: var(--primary); color: #fff; }
+.private-badge { background: #ede9fe; color: #6d28d9; }
+.winner-badge { background: #fff2cc; color: #8a5700; }
+.player-status-line { color: var(--muted); margin: 7px 0 10px; }
+.player-finance-list, .finance-group dl { margin: 0; }
+.player-finance-list > div, .finance-group dl > div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #e8edf3; padding: 8px 0; }
+dt, dd { margin: 0; }
+dd { font-weight: 700; text-align: right; }
+
+.consumer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(345px, 1fr)); gap: 14px; }
+.consumer-card { border: 1px solid var(--line); border-radius: 13px; padding: 16px; background: #fcfdff; }
+.consumer-card-header p { margin-bottom: 4px; color: var(--muted); }
+.pie-layout { display: grid; grid-template-columns: 118px 1fr; gap: 16px; align-items: center; margin: 14px 0; }
+.pie-chart { width: 112px; aspect-ratio: 1; border-radius: 50%; background: var(--pie); box-shadow: inset 0 0 0 1px rgba(0,0,0,.05); }
+.pie-legend { display: grid; gap: 7px; }
+.pie-legend-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.cohort-list { border-top: 1px solid var(--line); padding-top: 9px; }
+.cohort-row { padding: 8px 0; border-bottom: 1px dashed #dfe6ee; }
+.cohort-row:last-child { border-bottom: 0; }
+.cohort-row span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
+
+.star-card, .star-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.star-card > div, .star-result-grid > div { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fafcff; }
+.star-card span, .star-result-grid span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 5px; }
+.bid-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.bid-list span { background: #eef3f8; border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 11px; border-bottom: 1px solid #e4e9ef; text-align: left; vertical-align: top; white-space: nowrap; }
+th { background: #f5f8fb; color: #475569; font-size: 13px; }
+.module-cell { min-width: 190px; white-space: normal; font-size: 12px; line-height: 1.6; }
+small { color: var(--muted); }
+
+.result-section { margin-top: 20px; }
+.result-section:first-child { margin-top: 0; }
+.round-label { display: inline-block; border-radius: 999px; background: var(--primary-soft); color: var(--primary); padding: 5px 10px; font-weight: 700; }
+.private-finance { border-top: 2px solid #d9d4f7; padding-top: 18px; }
+.finance-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 13px; }
+.finance-group { border: 1px solid var(--line); border-radius: 11px; padding: 13px; }
+.finance-group h4 { margin-bottom: 8px; }
+
+.selector-grid, .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+.checkbox-list { display: grid; gap: 10px; }
+.checkbox-option { display: flex; gap: 11px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.checkbox-option input { width: auto; }
+.checkbox-option span { display: grid; gap: 3px; }
+.checkbox-option small { display: block; }
+.page-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.rule-notice { border: 1px solid #f2c36b; border-radius: 10px; background: #fff8e8; padding: 14px; margin-bottom: 14px; }
+.rule-notice p { margin: 7px 0 0; line-height: 1.55; }
+.warning { background: var(--negative-bg); border: 1px solid #f0b4ae; border-radius: 8px; padding: 10px; }
+pre { overflow: auto; border-radius: 10px; background: #101828; color: #e7edf5; padding: 15px; font-size: 12px; }
+
+@media (max-width: 720px) {
+    .page { width: min(100% - 20px, 1240px); margin-top: 14px; }
+    .topbar, .top-actions, .room-controls, .tabs, .page-actions, .section-heading { align-items: stretch; flex-direction: column; }
+    .tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .pie-layout { grid-template-columns: 1fr; justify-items: center; }
+    .pie-legend { width: 100%; }
+    button { width: 100%; }
+}
+
+
+/* Consumer company hierarchy */
+.holding-tree { display: grid; gap: 8px; margin-top: 14px; }
+.company-holding { border: 1px solid var(--line); border-left: 5px solid var(--company-color); border-radius: 10px; overflow: hidden; background: #fff; }
+.company-holding summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; cursor: pointer; list-style: none; background: color-mix(in srgb, var(--company-color) 7%, white); }
+.company-holding summary::-webkit-details-marker { display: none; }
+.company-summary-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.company-summary-main .legend-dot { width: 11px; height: 11px; flex: 0 0 11px; border-radius: 999px; background: var(--company-color); }
+.company-summary-main small { color: var(--muted); }
+.company-summary-rate { font-weight: 700; color: var(--company-color); }
+.model-holding-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.model-holding-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; }
+.model-holding-row + .model-holding-row { border-top: 1px solid var(--line); }
+.model-holding-row span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+/* Six independent component tables */
+.component-market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 16px; }
+.component-market-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.component-market-card h3 { margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--primary-soft); }
+.component-market-card .table-wrap { margin: 0; border: 0; border-radius: 0; }
+.component-market-card table { min-width: 680px; }
+
+@media (max-width: 720px) {
+    .component-market-grid { grid-template-columns: 1fr; }
+    .model-holding-row { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
+
+
+/* Corrected consumer company hierarchy */
+.brand-market-layout {
+    display: grid;
+    grid-template-columns: 126px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    margin-top: 14px;
+}
+.brand-market-layout > .pie-chart {
+    position: sticky;
+    top: 12px;
+    width: 118px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--pie);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+}
+.brand-company-list { display: grid; gap: 8px; min-width: 0; }
+.brand-company-item {
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--company-color);
+    border-radius: 10px;
+    background: #fff;
+    overflow: hidden;
+}
+.brand-company-item summary {
+    display: grid;
+    grid-template-columns: 11px minmax(90px, 1fr) auto auto 16px;
+    gap: 9px;
+    align-items: center;
+    padding: 11px 12px;
+    cursor: pointer;
+    list-style: none;
+}
+.brand-company-item summary::-webkit-details-marker { display: none; }
+.brand-company-item summary .legend-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--company-color);
+}
+.brand-company-item[open] summary {
+    background: #f7f9fc;
+    border-bottom: 1px solid var(--line);
+}
+.brand-company-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+}
+.brand-company-population { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.details-arrow { color: var(--muted); transition: transform .15s ease; }
+.brand-company-item[open] .details-arrow { transform: rotate(180deg); }
+.brand-model-list { padding: 4px 12px 8px 20px; }
+.brand-model-row {
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px dashed #dfe6ee;
+}
+.brand-model-row:last-child { border-bottom: 0; }
+.model-color-line { align-self: stretch; min-height: 34px; border-radius: 999px; opacity: .72; }
+.brand-model-copy { min-width: 0; }
+.brand-model-copy strong { display: block; }
+.brand-model-copy small { display: block; margin-top: 3px; white-space: normal; line-height: 1.45; }
+.brand-model-metrics { display: grid; justify-items: end; gap: 3px; font-size: 13px; white-space: nowrap; }
+.brand-model-metrics span { color: var(--muted); }
+
+/* Corrected six independent component tables */
+.component-market-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+.component-market-card {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+}
+.component-market-card-title {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    background: #f7f9fc;
+    border-bottom: 1px solid var(--line);
+}
+.component-market-card-title h3 { margin: 0; }
+.component-table-scroll { width: 100%; overflow-x: auto; }
+.component-market-table {
+    display: table;
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+.component-market-table thead { display: table-header-group; }
+.component-market-table tbody { display: table-row-group; }
+.component-market-table tr { display: table-row; }
+.component-market-table th,
+.component-market-table td { display: table-cell; }
+.component-market-table th:first-child,
+.component-market-table td:first-child { white-space: normal; min-width: 180px; }
+.market-up { color: var(--negative) !important; font-weight: 800; }
+.market-down { color: var(--positive) !important; font-weight: 800; }
+.market-flat { color: var(--muted); }
+
+@media (max-width: 720px) {
+    .brand-market-layout { grid-template-columns: 1fr; justify-items: center; }
+    .brand-market-layout > .pie-chart { position: static; }
+    .brand-company-list { width: 100%; }
+    .brand-company-item summary { grid-template-columns: 11px minmax(75px, 1fr) auto auto 14px; }
+    .brand-company-population { display: none; }
+    .brand-model-list { padding-left: 12px; }
+}
+/* 消费者市场：饼图在上，公司列表在下 */
+.brand-market-layout {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    width: 100%;
+}
+
+/* 饼图居中 */
+.pie-chart {
+    width: 140px;
+    height: 140px;
+    flex: 0 0 140px;
+    margin: 0 auto;
+}
+
+/* 公司列表占满整行 */
+.brand-company-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+/* 每家公司占满宽度 */
+.brand-company-item {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 公司标题行 */
+.brand-company-item summary {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto 20px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 公司名称不再被截断 */
+.brand-company-name {
+    min-width: 0;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
+/* 人数和百分比不换行 */
+.brand-company-population,
+.brand-company-item summary > strong {
+    white-space: nowrap;
+}
+
+/* 卡片根据公司数量自动增高 */
+.consumer-card {
+    height: auto !important;
+    overflow: visible;
+}
+
+.consumer-grid {
+    align-items: start;
+}
