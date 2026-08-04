@@ -1,7 +1,7 @@
 package phonemarket.mapper;
 
 import org.apache.ibatis.annotations.*;
-import phonemarket.entity.AppUser;
+import phonemarket.entity.User;
 import phonemarket.entity.Game;
 import phonemarket.entity.GamePlayer;
 
@@ -17,7 +17,7 @@ public interface UserMapper {
             """
     )
     @Options(useGeneratedKeys = true, keyProperty = "id")
-    int createUser(AppUser userName);
+    int createUser(User userName);
 
     @Select("""
             SELECT *
@@ -25,14 +25,14 @@ public interface UserMapper {
             WHERE id = #{id}
             """)
     @Options
-    AppUser findUserId(long id);
+    User findUserId(long id);
     @Select("""
             SELECT *
             FROM user
             WHERE id = #{id}
             """)
     @Options
-    AppUser findGamePlayerId(long id);
+    User findGamePlayerId(long id);
 
 }
 

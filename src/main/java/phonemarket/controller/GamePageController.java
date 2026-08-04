@@ -10,6 +10,6 @@ public class GamePageController {
 
     @GetMapping("/{username:[^.]+}")
     public String gamePage(@PathVariable String username) {
-        return "forward:/index.html";
+        return "forward:/game.html";
     }
 }

@@ -1,8 +1,7 @@
--- Phone Market complete database rebuild script (character-set safe edition)
--- MySQL 8+
--- WARNING: Drops and recreates the phone_market database.
--- All executable string literals are ASCII or UTF-8 hex literals.
--- This file can be imported from GBK or UTF-8 Windows terminals.
+
+
+
+
 
 SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -21,10 +20,15 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE `user` (
     id BIGINT NOT NULL AUTO_INCREMENT,
     username VARCHAR(50) NOT NULL,
+    nickname VARCHAR(50) NOT NULL,
+    password_hash VARCHAR(100) NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_username (username)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
 
 -- ============================================================
 -- ============================================================
