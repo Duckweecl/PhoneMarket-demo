@@ -48,11 +48,11 @@ public interface AuthMapper {
 
     @Update("""
         UPDATE `user`
-        SET username = #{username}
+        SET nickname = #{nickname}
         WHERE id = #{userId}
         """)
-    int updateUsername(
+    int updateNickname(
             @Param("userId") long userId,
-            @Param("username") String username
+            @Param("nickname") String nickname
     );
 }

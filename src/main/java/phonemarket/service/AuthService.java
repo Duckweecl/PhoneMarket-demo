@@ -94,7 +94,7 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse updateUsername(
+    public AuthResponse updateNickname(
             long userId,
             UpdateUsernameRequest request
     ) {
@@ -105,27 +105,23 @@ public class AuthService {
             return failure(response, "用户不存在");
         }
 
-        String username = normalize(request.getUsername());
-        String validationMessage = validateUsername(username);
+        String Nickname = normalize(request.getUsername());
 
-        if (validationMessage != null) {
-            return failure(response, validationMessage);
-        }
-
-        if (Objects.equals(user.getUsername(), username)) {
-            return userResponse(response, user, "用户名没有变化");
+        response.setMessage(validateUsername(Nickname));
+        if (Objects.equals(user.getUsername(), Nickname)) {
+            return userResponse(response, user, "昵称没有变化");
         }
 
         try {
-            if (authMapper.updateUsername(userId, username) != 1) {
-                return failure(response, "修改用户名失败");
+            if (authMapper.updateNickname(userId, Nickname) != 1) {
+                return failure(response, "修改昵称失败");
             }
         } catch (DuplicateKeyException exception) {
-            return failure(response, "用户名已存在");
+            return failure(response, "昵称已存在");
         }
 
-        user.setUsername(username);
-        return userResponse(response, user, "用户名修改成功");
+        user.setUsername(Nickname);
+        return userResponse(response, user, "昵称修改成功");
     }
 
     private String validateRegistration(
@@ -169,17 +165,15 @@ public class AuthService {
 
     private String validateUsername(String username) {
         if (isBlank(username)) {
-            return "用户名不能为空";
+            return "昵称不能为空";
         }
-        if (username.length() < 4) {
-            return "用户名不能少于4个字符";
+        if (username.length() < 2) {
+            return "昵称不能少于2个字符";
         }
         if (username.length() > 20) {
-            return "用户名不能超过20个字符";
+            return "昵称不能超过20个字符";
         }
-        if (!username.matches(USERNAME_PATTERN)) {
-            return "用户名只能包含字母、数字和下划线";
-        }
+
         return null;
     }
 

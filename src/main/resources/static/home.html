@@ -14,7 +14,7 @@
             <strong id="nicknameText">玩家</strong>
             <span id="usernameText">@username</span>
         </div>
-        <button id="changeUsernameButton" class="secondary-button" type="button">修改用户名</button>
+        <button id="changeUsernameButton" class="secondary-button" type="button">修改昵称</button>
         <button id="logoutButton" class="danger-button" type="button">退出登录</button>
     </div>
 </header>
@@ -93,13 +93,13 @@
 <div id="usernameModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="usernameModalTitle">
     <div class="modal-box">
         <div class="modal-header">
-            <h2 id="usernameModalTitle">修改用户名</h2>
+            <h2 id="usernameModalTitle">修改昵称</h2>
             <button id="closeUsernameModalButton" class="close-button" type="button" aria-label="关闭">×</button>
         </div>
         <form id="usernameForm">
-            <label for="newUsername">新用户名</label>
-            <input id="newUsername" type="text" minlength="4" maxlength="20" autocomplete="off" required>
-            <p class="field-help">4～20 个字符，只能包含字母、数字和下划线。</p>
+            <label for="newUsername">新昵称</label>
+            <input id="newUsername" type="text" minlength="2" maxlength="20" autocomplete="off" required>
+            <p class="field-help">2～20 个字符。</p>
             <p id="usernameInputMessage" class="input-message"></p>
             <div class="modal-actions">
                 <button id="cancelUsernameButton" class="secondary-button" type="button">取消</button>
