@@ -1,5 +1,6 @@
 package phonemarket.mapper;
 
+import org.apache.coyote.Response;
 import org.apache.ibatis.annotations.*;
 import phonemarket.entity.User;
 
@@ -30,6 +31,18 @@ public interface AuthMapper {
 
     @Options
     User login(String username);
+
+    @Select("""
+    
+    SELECT
+    *
+    FROM `user`
+    WHERE id = #{userid)}
+    LIMIT 1
+    """)
+
+    @Options
+    User getCurrentUser(long userid);
 
 
 

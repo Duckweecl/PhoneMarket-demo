@@ -17,7 +17,7 @@ public class Gamecontroller {
     }
 
     @PostMapping("{id}/create")
-    public GameAndPlayer createGame(@PathVariable long id){
+    public RoomAndPlayers createGame(@PathVariable long id){
         return gameService.createGame(id);
     }
     @PostMapping("{id}/find/{gameId}")

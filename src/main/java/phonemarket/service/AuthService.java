@@ -25,7 +25,11 @@ public class AuthService {
         String username = response.getUsername();
         String password = response.getPassword();
         User user = authMapper.login(username);
-
+        if (user == null){
+            response.setSuccess(false);
+            response.setMessage("登陆失败 用户名不存在/密码错误");
+            return response;
+        }
         if (!(passwordEncoder.matches(
                 password,
                 user.getPasswordHash()
@@ -35,9 +39,31 @@ public class AuthService {
         }
         else{
             response.setSuccess(true);
+            response.setUserid(user.getId());
             response.setMessage("登陆成功");
             response.setNickname(user.getNickname());
         }
+        return response;
+    }
+
+    public Responce getCurrentUser(Long userId) {
+
+        Responce response = new Responce();
+
+        User user = authMapper.getCurrentUser(userId);
+
+        if (user == null) {
+            response.setSuccess(false);
+            response.setMessage("用户不存在");
+            return response;
+        }
+
+        response.setSuccess(true);
+        response.setMessage("用户已登录");
+        response.setUserid(user.getId());
+        response.setUsername(user.getUsername());
+        response.setNickname(user.getNickname());
+
         return response;
     }
 

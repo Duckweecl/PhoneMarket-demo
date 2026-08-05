@@ -13,6 +13,7 @@ import phonemarket.entity.Round;
 import phonemarket.mapper.GameMapper;
 import phonemarket.mapper.GamePlayerMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -35,10 +36,10 @@ public class GameService {
     }
 
     @Transactional
-    public GameAndPlayer createGame(long id){
+    public RoomAndPlayers createGame(long id){
         userService.findUserId(id);
         Game game = new Game();
-        GameAndPlayer gameAndPlayer = new GameAndPlayer();
+        RoomAndPlayers roomAndPlayers = new RoomAndPlayers();
         game.setStatus("WAITING");
         game.setCurrentRound(1);
         game.setMaxRound(10);
@@ -51,9 +52,11 @@ public class GameService {
         player.setSeatNo(1);
         gameMapper.join(player);
         gameMapper.increasePlayerCount(player.getGameId());
-        gameAndPlayer.setGame(gameMapper.Findbygame(game.getId()));
-        gameAndPlayer.setPlayer(gameMapper.findPlayer(player.getId()));
-        return gameAndPlayer;
+        List<GamePlayer> list = new ArrayList<>();
+        list.add(player);
+        roomAndPlayers.setGame(gameMapper.Findbygame(game.getId()));
+        roomAndPlayers.setPlayerlist(list);
+        return roomAndPlayers;
     }
 
 
