@@ -7,12 +7,9 @@ import java.time.LocalDateTime;
 
 @Data
 public class GamePlayer {
-
     private Long id;
-
     private Long gameId;
     private Long userId;
-
     private Integer seatNo;
 
     private BigDecimal cash;
@@ -24,4 +21,11 @@ public class GamePlayer {
 
     private String status;
     private LocalDateTime joinedAt;
+
+    /*
+     * 以下两个字段来自房间查询时与 user 表的 JOIN，
+     * 不属于 game_player 表本身。
+     */
+    private String username;
+    private String nickname;
 }

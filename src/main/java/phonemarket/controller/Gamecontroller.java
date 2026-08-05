@@ -25,7 +25,7 @@ public class Gamecontroller {
         return gameService.findGame(id);
     }
     @PostMapping("{id}/join/{gameId}")
-    public GameAndPlayer join(@PathVariable long id,@PathVariable long gameId){
+    public RoomAndPlayers join(@PathVariable long id,@PathVariable long gameId){
         return gameService.joinGame(id, gameId);
     }
     @PostMapping("/{userId}/start/{gameId}")
@@ -36,12 +36,12 @@ public class Gamecontroller {
         return gameService.startGame(userId, gameId);
     }
     @PostMapping("{id}/abort/{gameId}")
-    public Game abort(@PathVariable long id,@PathVariable long gameId){
+    public RoomAndPlayers abort(@PathVariable long id,@PathVariable long gameId){
         return gameService.abortGame(id,gameId);
     }
     @PostMapping("{id}/leave/{gameId}")
-    public String leave(@PathVariable long id,@PathVariable long gameId){
-        return gameService.leaveGame(id,gameId);
+    public void leave(@PathVariable long id,@PathVariable long gameId){
+        gameService.leaveGame(id,gameId);
     }
     @PostMapping("{id}/check/{gameId}")
     public RoomAndPlayers check(@PathVariable long id, @PathVariable long gameId){

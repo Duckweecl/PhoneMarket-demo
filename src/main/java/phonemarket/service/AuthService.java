@@ -1,11 +1,12 @@
 package phonemarket.service;
 
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import phonemarket.dto.Responce;
+import phonemarket.dto.AuthRequest;
+import phonemarket.dto.AuthResponse;
+import phonemarket.dto.UpdateUsernameRequest;
 import phonemarket.entity.User;
 import phonemarket.mapper.AuthMapper;
 
@@ -13,209 +14,202 @@ import java.util.Objects;
 
 @Service
 public class AuthService {
+
+    private static final String USERNAME_PATTERN = "^[A-Za-z0-9_]+$";
+    private static final String NICKNAME_PATTERN = "^[A-Za-z\\u4e00-\\u9fa5]+$";
+
     private final AuthMapper authMapper;
     private final PasswordEncoder passwordEncoder;
 
-    public AuthService(AuthMapper authMapper, PasswordEncoder passwordEncoder) {
+    public AuthService(
+            AuthMapper authMapper,
+            PasswordEncoder passwordEncoder
+    ) {
         this.authMapper = authMapper;
         this.passwordEncoder = passwordEncoder;
     }
 
-    public Responce login(Responce response){
-        String username = response.getUsername();
-        String password = response.getPassword();
-        User user = authMapper.login(username);
-        if (user == null){
-            response.setSuccess(false);
-            response.setMessage("登陆失败 用户名不存在/密码错误");
-            return response;
-        }
-        if (!(passwordEncoder.matches(
-                password,
-                user.getPasswordHash()
-        ))){
-            response.setSuccess(false);
-            response.setMessage("登陆失败 用户名不存在/密码错误");
-        }
-        else{
-            response.setSuccess(true);
-            response.setUserid(user.getId());
-            response.setMessage("登陆成功");
-            response.setNickname(user.getNickname());
-        }
-        return response;
-    }
+    public AuthResponse login(AuthRequest request) {
+        AuthResponse response = new AuthResponse();
 
-    public Responce getCurrentUser(Long userId) {
+        String username = normalize(request.getUsername());
+        String password = request.getPassword();
 
-        Responce response = new Responce();
-
-        User user = authMapper.getCurrentUser(userId);
-
-        if (user == null) {
-            response.setSuccess(false);
-            response.setMessage("用户不存在");
-            return response;
+        if (isBlank(username) || isBlank(password)) {
+            return failure(response, "登录失败，用户名或密码错误");
         }
 
-        response.setSuccess(true);
-        response.setMessage("用户已登录");
-        response.setUserid(user.getId());
-        response.setUsername(user.getUsername());
-        response.setNickname(user.getNickname());
+        User user = authMapper.findByUsername(username);
+        if (user == null
+                || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            return failure(response, "登录失败，用户名或密码错误");
+        }
 
-        return response;
+        return userResponse(response, user, "登录成功");
     }
 
     @Transactional
-    public Responce register(Responce response){
+    public AuthResponse register(AuthRequest request) {
+        AuthResponse response = new AuthResponse();
 
-        String username = response.getUsername();
-        String nickname = response.getNickname();
-        String password = response.getPassword();
-        if (checkUsernameIsNull(nickname)) {
-            response.setMessage("昵称不能为空");
-            return response;
-        }
+        String username = normalize(request.getUsername());
+        String nickname = normalize(request.getNickname());
+        String password = request.getPassword();
 
-        if (nickname.trim().length() < 2) {
-            response.setMessage("昵称不能少于2个字符");
-            return response;
-        }
-
-        if (checkUsernameIsTooLong(nickname)) {
-            response.setMessage("昵称不能超过20个字符");
-            return response;
-        }
-
-        if (checkNicknameFormatIsWrong(nickname)) {
-            response.setMessage("昵称只能包含中文或英文");
-            return response;
-        }
-
-        if (checkUsernameIsNull(username)) {
-            response.setMessage("用户名不能为空");
-            return response;
-        }
-
-        if (checkUsernameIsTooShort(username)) {
-            response.setMessage("用户名不能少于4个字符");
-            return response;
-        }
-
-        if (checkUsernameIsTooLong(username)) {
-            response.setMessage("用户名不能超过20个字符");
-            return response;
-        }
-
-        if (checkUsernameFormatIsWrong(username)) {
-            response.setMessage("用户名只能包含字母、数字和下划线");
-            return response;
-        }
-
-        if (checkPasswordIsNull(password)) {
-            response.setMessage("密码不能为空");
-            return response;
-        }
-
-        if (checkPasswordIsTooShort(password)) {
-            response.setMessage("密码不能少于6个字符");
-            return response;
-        }
-
-        if (checkPasswordIsTooLong(password)) {
-            response.setMessage("密码不能超过50个字符");
-            return response;
-        }
-
-        if (checkPasswordIsEqualToUsername(username, password)) {
-            response.setMessage("密码不能与用户名相同");
-            return response;
-        }
-        User user = new User();
-        user.setNickname(response.getNickname());
-        user.setUsername(response.getUsername());
-        user.setPasswordHash(
-                passwordEncoder.encode(response.getPassword())
+        String validationMessage = validateRegistration(
+                username,
+                nickname,
+                password
         );
 
-        System.out.println(user);
-        try {
-            int rows = authMapper.register(user);
-
-            if (rows != 1) {
-                response.setMessage("注册失败，请稍后重试");
-                return response;
-            }
-
-        } catch (DuplicateKeyException exception) {
-            response.setMessage("用户名已存在");
-            return response;
+        if (validationMessage != null) {
+            return failure(response, validationMessage);
         }
 
+        User user = new User();
+        user.setUsername(username);
+        user.setNickname(nickname);
+        user.setPasswordHash(passwordEncoder.encode(password));
 
-        response.setMessage("注册成功 请返回登陆");
+        try {
+            if (authMapper.register(user) != 1) {
+                return failure(response, "注册失败，请稍后重试");
+            }
+        } catch (DuplicateKeyException exception) {
+            return failure(response, "用户名已存在");
+        }
+
+        return userResponse(response, user, "注册成功，请返回登录");
+    }
+
+    public AuthResponse getCurrentUser(long userId) {
+        AuthResponse response = new AuthResponse();
+        User user = authMapper.findById(userId);
+
+        if (user == null) {
+            return failure(response, "用户不存在");
+        }
+
+        return userResponse(response, user, "用户已登录");
+    }
+
+    @Transactional
+    public AuthResponse updateUsername(
+            long userId,
+            UpdateUsernameRequest request
+    ) {
+        AuthResponse response = new AuthResponse();
+        User user = authMapper.findById(userId);
+
+        if (user == null) {
+            return failure(response, "用户不存在");
+        }
+
+        String username = normalize(request.getUsername());
+        String validationMessage = validateUsername(username);
+
+        if (validationMessage != null) {
+            return failure(response, validationMessage);
+        }
+
+        if (Objects.equals(user.getUsername(), username)) {
+            return userResponse(response, user, "用户名没有变化");
+        }
+
+        try {
+            if (authMapper.updateUsername(userId, username) != 1) {
+                return failure(response, "修改用户名失败");
+            }
+        } catch (DuplicateKeyException exception) {
+            return failure(response, "用户名已存在");
+        }
+
+        user.setUsername(username);
+        return userResponse(response, user, "用户名修改成功");
+    }
+
+    private String validateRegistration(
+            String username,
+            String nickname,
+            String password
+    ) {
+        if (isBlank(nickname)) {
+            return "昵称不能为空";
+        }
+        if (nickname.length() < 2) {
+            return "昵称不能少于2个字符";
+        }
+        if (nickname.length() > 20) {
+            return "昵称不能超过20个字符";
+        }
+        if (!nickname.matches(NICKNAME_PATTERN)) {
+            return "昵称只能包含中文或英文";
+        }
+
+        String usernameMessage = validateUsername(username);
+        if (usernameMessage != null) {
+            return usernameMessage;
+        }
+
+        if (isBlank(password)) {
+            return "密码不能为空";
+        }
+        if (password.length() < 6) {
+            return "密码不能少于6个字符";
+        }
+        if (password.length() > 50) {
+            return "密码不能超过50个字符";
+        }
+        if (Objects.equals(username, password)) {
+            return "密码不能与用户名相同";
+        }
+
+        return null;
+    }
+
+    private String validateUsername(String username) {
+        if (isBlank(username)) {
+            return "用户名不能为空";
+        }
+        if (username.length() < 4) {
+            return "用户名不能少于4个字符";
+        }
+        if (username.length() > 20) {
+            return "用户名不能超过20个字符";
+        }
+        if (!username.matches(USERNAME_PATTERN)) {
+            return "用户名只能包含字母、数字和下划线";
+        }
+        return null;
+    }
+
+    private AuthResponse userResponse(
+            AuthResponse response,
+            User user,
+            String message
+    ) {
+        response.setSuccess(true);
+        response.setMessage(message);
+        response.setUserId(user.getId());
+        response.setUsername(user.getUsername());
+        response.setNickname(user.getNickname());
         return response;
     }
 
-    // 检查用户名是否为 null 或空字符串
-    public boolean checkUsernameIsNull(String username) {
-        return username == null || username.trim().isEmpty();
-    }
-    // 检查用户名是否少于 4 个字符
-    public boolean checkUsernameIsTooShort(String username) {
-        if (username == null) {
-            return true;
-        }
-
-        return username.trim().length() < 4;
-    }
-    // 检查用户名是否超过 20 个字符
-    public boolean checkUsernameIsTooLong(String username) {
-        if (username == null) {
-            return false;
-        }
-
-        return username.trim().length() > 20;
-    }
-    // 检查用户名是否包含非法字符
-// 只允许英文字母、数字和下划线
-    public boolean checkUsernameFormatIsWrong(String username) {
-        if (username == null) {
-            return true;
-        }
-        return !username.trim().matches("^[A-Za-z0-9_]+$");
+    private AuthResponse failure(
+            AuthResponse response,
+            String message
+    ) {
+        response.setSuccess(false);
+        response.setMessage(message);
+        return response;
     }
 
-    // 只允许中文和英文字母，不允许空格
-    public boolean checkNicknameFormatIsWrong(String username) {
-        if (username == null) {
-            return true;
-        }
-
-        return !username.matches("^[A-Za-z\\u4e00-\\u9fa5]+$");
+    private String normalize(String value) {
+        return value == null ? null : value.trim();
     }
 
-    // 检查密码是否为 null 或空字符串
-    public boolean checkPasswordIsNull(String password) {
-        return password == null || password.isEmpty();
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
-
-    // 检查密码是否少于 6 个字符
-    public boolean checkPasswordIsTooShort(String password) {
-        return password.length() < 6;
-    }
-
-    // 检查密码是否超过 50 个字符
-    public boolean checkPasswordIsTooLong(String password) {
-        return password.length() > 50;
-    }
-
-    public boolean checkPasswordIsEqualToUsername(String username,String password) {
-        return Objects.equals(password, username);
-    }
-
-
-
-
 }

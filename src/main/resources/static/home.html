@@ -1,272 +1,124 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>玩家主页</title>
-
-    <link rel="stylesheet" href="/home.css">
+    <link rel="stylesheet" href="/home.css?v=20260805-2">
 </head>
-
 <body hidden>
-
 <header class="top-bar">
-
-    <div class="brand">
-        手机市场
-    </div>
-
+    <div class="brand">手机市场</div>
     <div class="user-area">
-
-        <span id="nicknameText">
-            玩家
-        </span>
-
-        <button
-                id="changeNicknameButton"
-                class="secondary-button"
-                type="button"
-        >
-            修改昵称
-        </button>
-
-        <button
-                id="logoutButton"
-                class="danger-button"
-                type="button"
-        >
-            退出登录
-        </button>
-
+        <div class="identity">
+            <strong id="nicknameText">玩家</strong>
+            <span id="usernameText">@username</span>
+        </div>
+        <button id="changeUsernameButton" class="secondary-button" type="button">修改用户名</button>
+        <button id="logoutButton" class="danger-button" type="button">退出登录</button>
     </div>
-
 </header>
 
 <main class="page-container">
-
     <section class="welcome-section">
-
-        <p class="page-label">
-            玩家主页
-        </p>
-
-        <h1 id="welcomeText">
-            欢迎
-        </h1>
-
-        <p>
-            创建房间或加入其他玩家的比赛。
-        </p>
-
+        <p class="page-label">PLAYER HOME</p>
+        <h1 id="welcomeText">欢迎</h1>
+        <p>继续已有比赛，或创建、加入一个等待房间。</p>
     </section>
 
-    <section class="content-card">
-
+    <section class="content-card active-games-section">
         <div class="section-heading">
-
             <div>
-                <h2>正在进行中的比赛</h2>
-
-                <p>
-                    显示等待开始或正在进行的比赛
-                </p>
+                <h2>我参与的比赛</h2>
+                <p>等待开始和正在进行中的比赛会自动刷新。</p>
             </div>
-
-            <span class="reserved-label">
-                功能预留
-            </span>
-
+            <button id="refreshActiveGamesButton" class="secondary-button compact-button" type="button">刷新</button>
         </div>
 
-        <div id="activeGameList">
+        <div id="activeGameList" class="active-game-list"></div>
 
-            <div class="empty-state">
-
-                <strong>
-                    暂无正在进行中的比赛
-                </strong>
-
-                <p>
-                    后续完成比赛查询接口后，
-                    比赛信息会显示在这里。
-                </p>
-
-            </div>
-
+        <div id="activeGameEmpty" class="empty-state hidden">
+            <strong>暂无参与中的比赛</strong>
+            <p>创建房间或输入房间号加入比赛。</p>
         </div>
 
+        <button id="toggleActiveGamesButton" class="text-button hidden" type="button">展开更多</button>
     </section>
 
     <section class="action-grid">
-
-        <button
-                id="createGameButton"
-                class="action-card"
-                type="button"
-        >
+        <button id="createGameButton" class="action-card" type="button">
             <span class="action-number">01</span>
-
             <strong>创建房间</strong>
-
-            <small>
-                创建一场新比赛并进入等待房间
-            </small>
+            <small>创建新房间。你拥有的旧等待房间会自动解散。</small>
         </button>
 
-        <button
-                id="joinGameButton"
-                class="action-card"
-                type="button"
-        >
+        <button id="joinGameButton" class="action-card" type="button">
             <span class="action-number">02</span>
-
             <strong>加入房间</strong>
-
-            <small>
-                输入房间号加入其他玩家
-            </small>
+            <small>输入房间号加入其他玩家的等待房间。</small>
         </button>
 
-        <button
-                id="historyButton"
-                class="action-card"
-                type="button"
-        >
+        <button id="historyButton" class="action-card" type="button">
             <span class="action-number">03</span>
-
             <strong>比赛记录</strong>
-
-            <small>
-                查看已经完成的比赛
-            </small>
+            <small>功能预留：查看已结束比赛。</small>
         </button>
 
-        <button
-                id="watchGameButton"
-                class="action-card"
-                type="button"
-        >
+        <button id="watchGameButton" class="action-card" type="button">
             <span class="action-number">04</span>
-
             <strong>观看比赛</strong>
-
-            <small>
-                观看其他玩家正在进行的比赛
-            </small>
+            <small>功能预留：观看其他玩家比赛。</small>
         </button>
-
     </section>
-
 </main>
 
-<!-- 加入房间弹窗 -->
-<div
-        id="joinModal"
-        class="modal hidden"
-        role="dialog"
-        aria-modal="true"
->
-
+<div id="joinModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="joinModalTitle">
     <div class="modal-box">
-
         <div class="modal-header">
-
-            <h2>加入房间</h2>
-
-            <button
-                    id="closeJoinModalButton"
-                    class="close-button"
-                    type="button"
-            >
-                ×
-            </button>
-
+            <h2 id="joinModalTitle">加入房间</h2>
+            <button id="closeJoinModalButton" class="close-button" type="button" aria-label="关闭">×</button>
         </div>
-
         <form id="joinGameForm">
-
-            <label for="joinGameId">
-                房间号
-            </label>
-
-            <input
-                    id="joinGameId"
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="请输入房间号"
-                    required
-            >
-
-            <p
-                    id="joinInputMessage"
-                    class="input-message"
-            ></p>
-
+            <label for="joinGameId">房间号</label>
+            <input id="joinGameId" type="number" min="1" step="1" placeholder="请输入房间号" required>
+            <p id="joinInputMessage" class="input-message"></p>
             <div class="modal-actions">
-
-                <button
-                        id="cancelJoinButton"
-                        class="secondary-button"
-                        type="button"
-                >
-                    取消
-                </button>
-
-                <button
-                        id="confirmJoinButton"
-                        class="primary-button"
-                        type="submit"
-                >
-                    确认加入
-                </button>
-
+                <button id="cancelJoinButton" class="secondary-button" type="button">取消</button>
+                <button id="confirmJoinButton" class="primary-button" type="submit">确认加入</button>
             </div>
-
         </form>
-
     </div>
-
 </div>
 
-<!-- 消息弹窗 -->
-<div
-        id="messageModal"
-        class="modal hidden"
-        role="dialog"
-        aria-modal="true"
->
-
+<div id="usernameModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="usernameModalTitle">
     <div class="modal-box">
-
-        <h2 id="messageTitle">
-            提示
-        </h2>
-
-        <p id="messageText"></p>
-
-        <div class="modal-actions">
-
-            <button
-                    id="closeMessageButton"
-                    class="primary-button"
-                    type="button"
-            >
-                确定
-            </button>
-
+        <div class="modal-header">
+            <h2 id="usernameModalTitle">修改用户名</h2>
+            <button id="closeUsernameModalButton" class="close-button" type="button" aria-label="关闭">×</button>
         </div>
-
+        <form id="usernameForm">
+            <label for="newUsername">新用户名</label>
+            <input id="newUsername" type="text" minlength="4" maxlength="20" autocomplete="off" required>
+            <p class="field-help">4～20 个字符，只能包含字母、数字和下划线。</p>
+            <p id="usernameInputMessage" class="input-message"></p>
+            <div class="modal-actions">
+                <button id="cancelUsernameButton" class="secondary-button" type="button">取消</button>
+                <button id="confirmUsernameButton" class="primary-button" type="submit">保存</button>
+            </div>
+        </form>
     </div>
-
 </div>
 
-<script src="/home.js"></script>
+<div id="messageModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="messageTitle">
+    <div class="modal-box">
+        <h2 id="messageTitle">提示</h2>
+        <p id="messageText"></p>
+        <div class="modal-actions">
+            <button id="closeMessageButton" class="primary-button" type="button">确定</button>
+        </div>
+    </div>
+</div>
 
+<script src="/home.js?v=20260805-2"></script>
 </body>
 </html>

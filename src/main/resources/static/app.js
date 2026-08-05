@@ -1,11 +1,8 @@
 const API = {
-    quickLogin: username => `/api/quick-login/${encodeURIComponent(username)}`,
-    createGame: userId => `/${userId}/create`,
-    joinGame: (userId, gameId) => `/${userId}/join/${gameId}`,
-    startGame: (userId, gameId) => `/${userId}/start/${gameId}`,
-    overview: (userId, gameId) => `/api/games/${gameId}/overview/${userId}`,
-    status: (userId, gameId) => `/api/games/${gameId}/rounds/status/${userId}`,
-    submitAction: (userId, gameId) => `/api/games/${gameId}/rounds/current/actions/${userId}`
+    currentUser: "/api/auth/me",
+    overview: gameId => `/api/games/${gameId}/overview`,
+    status: gameId => `/api/games/${gameId}/rounds/status`,
+    submitAction: gameId => `/api/games/${gameId}/rounds/current/actions`
 };
 
 const state = {
@@ -79,28 +76,42 @@ async function initialize() {
     bindEvents();
     renderAdvertisingOptions();
 
-    const username = decodeURIComponent(location.pathname.replace(/^\//, "").trim());
-    if (!username) {
-        showMessage("请通过 /用户名 访问游戏。", "error");
+    const gameId = positiveInteger(
+        new URLSearchParams(location.search).get("gameId")
+    );
+
+    if (!gameId) {
+        location.replace("/home.html");
         return;
     }
 
     try {
-        const login = await request(API.quickLogin(username), {method: "POST"});
-        state.userId = login.userId;
-        state.username = login.username;
-        elements.loginText.textContent = `当前用户：${login.username}（ID ${login.userId}）`;
-        elements.createButton.disabled = false;
-        elements.joinButton.disabled = false;
+        const currentUser = await request(API.currentUser);
+
+        state.userId = Number(currentUser.userId);
+        state.username = currentUser.username;
+        state.gameId = gameId;
+
+        const displayName = currentUser.nickname || currentUser.username || "玩家";
+        elements.loginText.textContent = `当前用户：${displayName}（@${currentUser.username}）`;
+        elements.roomText.textContent = gameId;
+        elements.refreshButton.disabled = false;
+
+        await loadOverview();
     } catch (error) {
         showMessage(error.message, "error");
+
+        if (error.status === 401) {
+            location.replace("/");
+        } else if (error.status === 403 || error.status === 404) {
+            setTimeout(() => location.replace("/home.html"), 1200);
+        }
     }
 }
 
 function cacheElements() {
     [
-        "loginText", "roomText", "refreshButton", "createButton", "joinButton", "startButton",
-        "gameIdInput", "message", "gameArea", "processingBanner", "finalBanner", "summaryCards",
+        "loginText", "roomText", "refreshButton", "message", "gameArea", "processingBanner", "finalBanner", "summaryCards",
         "playerFinance", "consumerMarket", "starInfo", "componentTable", "previousRound", "rawJson",
         "componentSelectors", "modelName", "componentUnitCost", "assemblyUnitCost", "phoneUnitCost",
         "totalGrade", "majorBudgetCards", "productionQuantity", "salePrice", "starBid",
@@ -112,9 +123,6 @@ function cacheElements() {
 }
 
 function bindEvents() {
-    elements.createButton.addEventListener("click", createGame);
-    elements.joinButton.addEventListener("click", joinGame);
-    elements.startButton.addEventListener("click", startGame);
     elements.refreshButton.addEventListener("click", loadOverview);
     elements.submitActionButton.addEventListener("click", submitAction);
 
@@ -132,52 +140,11 @@ function bindEvents() {
         }));
 }
 
-async function createGame() {
-    try {
-        const result = await request(API.createGame(state.userId), {method: "POST"});
-        enterRoom(result.game.id);
-        showMessage(`房间 ${result.game.id} 已创建。`, "success");
-    } catch (error) {
-        showMessage(error.message, "error");
-    }
-}
-
-async function joinGame() {
-    const gameId = positiveInteger(elements.gameIdInput.value);
-    if (!gameId) return showMessage("请输入有效房间 ID。", "error");
-    try {
-        const result = await request(API.joinGame(state.userId, gameId), {method: "POST"});
-        enterRoom(result.game.id);
-        showMessage(`已加入房间 ${result.game.id}。`, "success");
-    } catch (error) {
-        showMessage(error.message, "error");
-    }
-}
-
-function enterRoom(gameId) {
-    state.gameId = Number(gameId);
-    elements.roomText.textContent = state.gameId;
-    elements.gameIdInput.value = state.gameId;
-    elements.startButton.disabled = false;
-    elements.refreshButton.disabled = false;
-}
-
-async function startGame() {
-    if (!state.gameId) return showMessage("请先创建或加入房间。", "error");
-    try {
-        const overview = await request(API.startGame(state.userId, state.gameId), {method: "POST"});
-        applyOverview(overview);
-        showMessage("游戏已经开始。", "success");
-    } catch (error) {
-        showMessage(error.message, "error");
-    }
-}
-
 async function loadOverview() {
     if (!state.userId || !state.gameId || state.loadingOverview) return;
     state.loadingOverview = true;
     try {
-        const overview = await request(API.overview(state.userId, state.gameId));
+        const overview = await request(API.overview(state.gameId));
         applyOverview(overview);
     } catch (error) {
         showMessage(error.message, "error");
@@ -635,7 +602,7 @@ async function submitAction() {
     elements.submitActionButton.disabled = true;
     showMessage("正在提交方案……", "");
     try {
-        const response = await request(API.submitAction(state.userId, state.gameId), {
+        const response = await request(API.submitAction(state.gameId), {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(payload)
@@ -701,7 +668,7 @@ function startPolling() {
 async function pollStatus() {
     if (!state.overview || !state.gameId || state.loadingOverview) return;
     try {
-        const status = await request(API.status(state.userId, state.gameId));
+        const status = await request(API.status(state.gameId));
         const current = state.overview.currentRound;
         const roundChanged = Number(status.currentRoundId) !== Number(current?.roundId);
         const gameChanged = status.gameStatus !== state.overview.gameStatus;
@@ -915,16 +882,36 @@ function sleep(milliseconds) {
 }
 
 async function request(url, options = {}) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+            Accept: "application/json",
+            ...(options.headers || {})
+        }
+    });
+
     const text = await response.text();
     let body = null;
+
     if (text) {
-        try { body = JSON.parse(text); } catch { body = text; }
+        try {
+            body = JSON.parse(text);
+        } catch {
+            body = text;
+        }
     }
+
     if (!response.ok) {
-        const message = body?.message || body?.detail || (typeof body === "string" ? body : `请求失败：${response.status}`);
-        throw new Error(message);
+        const message = body?.message
+            || body?.detail
+            || (typeof body === "string" ? body : `请求失败：${response.status}`);
+
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
     }
+
     return body;
 }
 

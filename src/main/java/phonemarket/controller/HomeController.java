@@ -1,103 +1,85 @@
 package phonemarket.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import phonemarket.dto.ActiveGamesResponse;
 import phonemarket.dto.RoomResultResponse;
 import phonemarket.service.HomeService;
+import phonemarket.service.SessionUserService;
 
 @RestController
 @RequestMapping("/api/games")
 public class HomeController {
 
     private final HomeService homeService;
+    private final SessionUserService sessionUserService;
 
-    public HomeController(HomeService homeService) {
+    public HomeController(
+            HomeService homeService,
+            SessionUserService sessionUserService
+    ) {
         this.homeService = homeService;
+        this.sessionUserService = sessionUserService;
     }
-
 
     @PostMapping("/create")
-    public ResponseEntity<RoomResultResponse> create(
-            HttpServletRequest request
-    ) {
-        Long userId = getSessionUserId(request);
-
-        if (userId == null) {
-            return unauthorized();
-        }
-
-        RoomResultResponse response =
-                homeService.create(userId);
-
-        if (!response.isSuccess()) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(response);
-        }
-
-        return ResponseEntity.ok(response);
+    public RoomResultResponse create(HttpSession session) {
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.create(userId);
     }
 
+    @PostMapping("/{gameId}/join")
+    public RoomResultResponse join(
+            @PathVariable long gameId,
+            HttpSession session
+    ) {
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.join(gameId, userId);
+    }
 
     @GetMapping("/{gameId}/room")
-    public ResponseEntity<RoomResultResponse> getRoom(
+    public RoomResultResponse getRoom(
             @PathVariable long gameId,
-            HttpServletRequest request
+            HttpSession session
     ) {
-        Long userId = getSessionUserId(request);
-
-        if (userId == null) {
-            return unauthorized();
-        }
-
-        RoomResultResponse response =
-                homeService.getRoom(gameId, userId);
-
-        if (!response.isSuccess()) {
-            return ResponseEntity
-                    .status(HttpStatus.FORBIDDEN)
-                    .body(response);
-        }
-
-        return ResponseEntity.ok(response);
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.getRoom(gameId, userId);
     }
 
-
-    private Long getSessionUserId(
-            HttpServletRequest request
+    @PostMapping("/{gameId}/leave")
+    public RoomResultResponse leave(
+            @PathVariable long gameId,
+            HttpSession session
     ) {
-        HttpSession session =
-                request.getSession(false);
-
-        if (session == null) {
-            return null;
-        }
-
-        Object value =
-                session.getAttribute("userId");
-
-        if (!(value instanceof Number)) {
-            return null;
-        }
-
-        return ((Number) value).longValue();
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.leave(gameId, userId);
     }
 
+    @PostMapping("/{gameId}/abort")
+    public RoomResultResponse abort(
+            @PathVariable long gameId,
+            HttpSession session
+    ) {
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.abort(gameId, userId);
+    }
 
-    private ResponseEntity<RoomResultResponse>
-    unauthorized() {
+    @PostMapping("/{gameId}/start")
+    public RoomResultResponse start(
+            @PathVariable long gameId,
+            HttpSession session
+    ) {
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.start(gameId, userId);
+    }
 
-        RoomResultResponse response =
-                new RoomResultResponse();
-
-        response.setSuccess(false);
-        response.setMessage("用户未登录");
-
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(response);
+    @GetMapping("/mine/active")
+    public ActiveGamesResponse activeGames(HttpSession session) {
+        long userId = sessionUserService.requireUserId(session);
+        return homeService.getActiveGames(userId);
     }
 }

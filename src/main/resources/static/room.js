@@ -1,709 +1,387 @@
 "use strict";
 
-
 const API = {
     currentUser: "/api/auth/me",
     logout: "/api/auth/logout",
-
-    roomDetail: gameId =>
-        `/api/games/${gameId}/room`,
-
-    startGame: gameId =>
-        `/api/games/${gameId}/start`,
-
-    leaveRoom: gameId =>
-        `/api/games/${gameId}/leave`,
-
-    abortRoom: gameId =>
-        `/api/games/${gameId}/abort`
+    room: gameId => `/api/games/${gameId}/room`,
+    start: gameId => `/api/games/${gameId}/start`,
+    leave: gameId => `/api/games/${gameId}/leave`,
+    abort: gameId => `/api/games/${gameId}/abort`
 };
-
 
 const state = {
     userId: null,
-    username: null,
-    nickname: null,
-
     gameId: null,
-
     roomAndPlayers: null,
-
     currentPlayer: null,
     ownerPlayer: null,
-
-    refreshTimer: null,
-    loadingRoom: false
+    pollingTimer: null,
+    loading: false,
+    redirecting: false,
+    messageCloseAction: null
 };
 
-
-const elements = {
-    nicknameText:
-        document.getElementById("nicknameText"),
-
-    homeButton:
-        document.getElementById("homeButton"),
-
-    logoutButton:
-        document.getElementById("logoutButton"),
-
-    gameIdText:
-        document.getElementById("gameIdText"),
-
-    roomDescription:
-        document.getElementById("roomDescription"),
-
-    statusBadge:
-        document.getElementById("statusBadge"),
-
-    playerCountText:
-        document.getElementById("playerCountText"),
-
-    playerList:
-        document.getElementById("playerList"),
-
-    emptyPlayerText:
-        document.getElementById("emptyPlayerText"),
-
-    roomStatusText:
-        document.getElementById("roomStatusText"),
-
-    ownerText:
-        document.getElementById("ownerText"),
-
-    currentPlayersText:
-        document.getElementById("currentPlayersText"),
-
-    currentRoundText:
-        document.getElementById("currentRoundText"),
-
-    maxRoundText:
-        document.getElementById("maxRoundText"),
-
-    refreshButton:
-        document.getElementById("refreshButton"),
-
-    startGameButton:
-        document.getElementById("startGameButton"),
-
-    leaveRoomButton:
-        document.getElementById("leaveRoomButton"),
-
-    actionHint:
-        document.getElementById("actionHint"),
-
-    messageModal:
-        document.getElementById("messageModal"),
-
-    messageTitle:
-        document.getElementById("messageTitle"),
-
-    messageText:
-        document.getElementById("messageText"),
-
-    closeMessageButton:
-        document.getElementById("closeMessageButton")
-};
-
+const elements = Object.fromEntries([
+    "nicknameText",
+    "homeButton",
+    "logoutButton",
+    "gameIdText",
+    "roomDescription",
+    "statusBadge",
+    "playerCountText",
+    "playerList",
+    "emptyPlayerText",
+    "roomStatusText",
+    "ownerText",
+    "currentPlayersText",
+    "currentRoundText",
+    "maxRoundText",
+    "refreshButton",
+    "startGameButton",
+    "leaveRoomButton",
+    "actionHint",
+    "messageModal",
+    "messageTitle",
+    "messageText",
+    "closeMessageButton"
+].map(id => [id, document.getElementById(id)]));
 
 async function request(url, options = {}) {
-    const {
-        headers = {},
-        ...otherOptions
-    } = options;
-
     const response = await fetch(url, {
         credentials: "same-origin",
-
-        ...otherOptions,
-
+        ...options,
         headers: {
             Accept: "application/json",
-            ...headers
+            ...(options.headers || {})
         }
     });
 
-    const responseText = await response.text();
+    const text = await response.text();
+    let body = {};
 
-    let result = {};
-
-    if (responseText) {
+    if (text) {
         try {
-            result = JSON.parse(responseText);
-        } catch (error) {
-            result = {
-                message: responseText
-            };
+            body = JSON.parse(text);
+        } catch {
+            body = {message: text};
         }
     }
 
-    if (!response.ok || result.success === false) {
-        const requestError = new Error(
-            result.message ||
-            result.detail ||
-            result.error ||
-            `请求失败，状态码：${response.status}`
+    if (!response.ok || body.success === false) {
+        const error = new Error(
+            body.message || body.detail || `请求失败：${response.status}`
         );
-
-        requestError.status = response.status;
-
-        throw requestError;
+        error.status = response.status;
+        throw error;
     }
 
-    return result;
+    return body;
 }
 
-
-function showMessage(title, text) {
+function showMessage(title, text, closeAction = null) {
+    state.messageCloseAction = closeAction;
     elements.messageTitle.textContent = title;
     elements.messageText.textContent = text;
-
     elements.messageModal.classList.remove("hidden");
 }
 
-
 function closeMessage() {
     elements.messageModal.classList.add("hidden");
+    const closeAction = state.messageCloseAction;
+    state.messageCloseAction = null;
+    if (closeAction) closeAction();
 }
-
 
 function getGameIdFromUrl() {
-    const parameters =
-        new URLSearchParams(location.search);
-
-    const gameId =
-        Number(parameters.get("gameId"));
-
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-        return null;
-    }
-
-    return gameId;
+    const gameId = Number(new URLSearchParams(location.search).get("gameId"));
+    return Number.isInteger(gameId) && gameId > 0 ? gameId : null;
 }
 
+function gameUrl() {
+    return `/game.html?gameId=${encodeURIComponent(state.gameId)}`;
+}
 
-function getGameStatusText(status) {
-    const statusMap = {
+function stopPolling() {
+    if (state.pollingTimer) {
+        clearInterval(state.pollingTimer);
+        state.pollingTimer = null;
+    }
+}
+
+function statusText(status) {
+    return {
         WAITING: "等待开始",
         RUNNING: "比赛进行中",
-        IN_PROGRESS: "比赛进行中",
         FINISHED: "比赛已结束",
         ABORTED: "房间已解散"
-    };
-
-    return statusMap[status] ||
-        status ||
-        "未知状态";
+    }[status] || status || "未知状态";
 }
-
-
-function getPlayerStatusText(status) {
-    const statusMap = {
-        ACTIVE: "房间中",
-        WAITING: "等待中",
-        LEFT: "已离开",
-        FINISHED: "已完成"
-    };
-
-    return statusMap[status] ||
-        status ||
-        "房间中";
-}
-
 
 function updateStatusBadge(status) {
-    elements.statusBadge.className =
-        "status-badge";
+    elements.statusBadge.className = "status-badge";
 
-    if (status === "WAITING") {
-        elements.statusBadge.classList.add(
-            "waiting"
-        );
+    const className = {
+        WAITING: "waiting",
+        RUNNING: "running",
+        FINISHED: "finished",
+        ABORTED: "aborted"
+    }[status] || "finished";
 
-    } else if (
-        status === "RUNNING" ||
-        status === "IN_PROGRESS"
-    ) {
-        elements.statusBadge.classList.add(
-            "running"
-        );
-
-    } else if (status === "FINISHED") {
-        elements.statusBadge.classList.add(
-            "finished"
-        );
-
-    } else {
-        elements.statusBadge.classList.add(
-            "aborted"
-        );
-    }
-
-    elements.statusBadge.textContent =
-        getGameStatusText(status);
+    elements.statusBadge.classList.add(className);
+    elements.statusBadge.textContent = statusText(status);
 }
 
+function playerDisplayName(player) {
+    return player.nickname || player.username || `玩家 ${player.userId}`;
+}
 
 function createLabel(text, className) {
-    const label =
-        document.createElement("span");
-
+    const label = document.createElement("span");
     label.className = className;
     label.textContent = text;
-
     return label;
 }
 
-
 function createPlayerCard(player) {
-    const card =
-        document.createElement("div");
-
+    const card = document.createElement("article");
     card.className = "player-card";
+    if (player.status !== "ACTIVE") card.classList.add("inactive");
 
-    const main =
-        document.createElement("div");
-
+    const main = document.createElement("div");
     main.className = "player-main";
 
-    const avatar =
-        document.createElement("div");
-
+    const avatar = document.createElement("div");
     avatar.className = "player-avatar";
-    avatar.textContent =
-        player.seatNo ?? "?";
+    avatar.textContent = player.seatNo ?? "?";
 
-    const information =
-        document.createElement("div");
-
-    const name =
-        document.createElement("div");
-
+    const info = document.createElement("div");
+    const name = document.createElement("div");
     name.className = "player-name";
-    name.textContent =
-        `玩家 ${player.userId}`;
+    name.textContent = playerDisplayName(player);
 
-    const extra =
-        document.createElement("div");
-
+    const extra = document.createElement("div");
     extra.className = "player-extra";
-    extra.textContent =
-        `座位 ${player.seatNo ?? "-"}`;
+    extra.textContent = `${player.username ? `@${player.username} · ` : ""}座位 ${player.seatNo ?? "-"}`;
 
-    information.appendChild(name);
-    information.appendChild(extra);
-
+    info.appendChild(name);
+    info.appendChild(extra);
     main.appendChild(avatar);
-    main.appendChild(information);
+    main.appendChild(info);
 
-    const labels =
-        document.createElement("div");
-
+    const labels = document.createElement("div");
     labels.className = "player-labels";
 
     if (Number(player.seatNo) === 1) {
-        labels.appendChild(
-            createLabel(
-                "房主",
-                "owner-label"
-            )
-        );
+        labels.appendChild(createLabel("房主", "owner-label"));
     }
 
-    if (
-        state.userId !== null &&
-        Number(player.userId) === state.userId
-    ) {
-        labels.appendChild(
-            createLabel(
-                "你",
-                "current-user-label"
-            )
-        );
+    if (Number(player.userId) === state.userId) {
+        labels.appendChild(createLabel("你", "current-user-label"));
     }
 
-    labels.appendChild(
-        createLabel(
-            getPlayerStatusText(player.status),
-            "player-status-label"
-        )
-    );
+    labels.appendChild(createLabel(
+        player.status === "ACTIVE" ? "房间中" : "已离开",
+        `player-status-label ${player.status === "ACTIVE" ? "" : "inactive"}`.trim()
+    ));
 
     card.appendChild(main);
     card.appendChild(labels);
-
     return card;
 }
 
-
-function renderPlayers(playerlist) {
+function renderPlayers(players) {
     elements.playerList.replaceChildren();
 
-    if (
-        !Array.isArray(playerlist) ||
-        playerlist.length === 0
-    ) {
-        elements.emptyPlayerText.classList.remove(
-            "hidden"
-        );
-
+    if (!players.length) {
+        elements.emptyPlayerText.classList.remove("hidden");
         return;
     }
 
-    elements.emptyPlayerText.classList.add(
-        "hidden"
-    );
+    elements.emptyPlayerText.classList.add("hidden");
 
-    const sortedPlayers = [...playerlist].sort(
-        function (firstPlayer, secondPlayer) {
-            return (
-                Number(firstPlayer.seatNo) -
-                Number(secondPlayer.seatNo)
-            );
-        }
-    );
-
-    for (const player of sortedPlayers) {
-        elements.playerList.appendChild(
-            createPlayerCard(player)
-        );
-    }
+    [...players]
+        .sort((a, b) => Number(a.seatNo) - Number(b.seatNo))
+        .forEach(player => elements.playerList.appendChild(createPlayerCard(player)));
 }
 
+function renderActions(game, players) {
+    state.currentPlayer = players.find(player => Number(player.userId) === state.userId) || null;
+    state.ownerPlayer = players.find(player => Number(player.seatNo) === 1) || null;
 
-function updateRoomActions(game, playerlist) {
-    state.currentPlayer =
-        playerlist.find(
-            player =>
-                Number(player.userId) === state.userId
-        ) || null;
+    const currentUserIsOwner = Number(state.currentPlayer?.seatNo) === 1;
+    const waiting = game.status === "WAITING";
 
-    state.ownerPlayer =
-        playerlist.find(
-            player =>
-                Number(player.seatNo) === 1
-        ) || null;
+    elements.startGameButton.classList.toggle("hidden", !(currentUserIsOwner && waiting));
+    elements.startGameButton.disabled = !waiting;
 
-    const currentUserIsOwner =
-        state.currentPlayer !== null &&
-        Number(state.currentPlayer.seatNo) === 1;
-
-    const roomIsWaiting =
-        game.status === "WAITING";
-
-    /*
-     * 只有房主并且房间为 WAITING 时显示开始按钮。
-     */
-    if (currentUserIsOwner && roomIsWaiting) {
-        elements.startGameButton.classList.remove(
-            "hidden"
-        );
-
-        elements.startGameButton.disabled = false;
-
-        elements.actionHint.textContent =
-            "你是房主，可以开始比赛。";
-
-    } else {
-        elements.startGameButton.classList.add(
-            "hidden"
-        );
-
-        elements.actionHint.textContent =
-            roomIsWaiting
-                ? "等待房主开始比赛。"
-                : "";
-    }
-
-    /*
-     * 房主点击时解散房间，
-     * 普通玩家点击时离开房间。
-     */
     if (currentUserIsOwner) {
-        elements.leaveRoomButton.textContent =
-            "解散房间";
+        elements.leaveRoomButton.textContent = "解散房间";
+        elements.actionHint.textContent = waiting
+            ? "你是房主。只有你可以开始或解散房间。"
+            : "";
     } else {
-        elements.leaveRoomButton.textContent =
-            "离开房间";
+        elements.leaveRoomButton.textContent = "离开房间";
+        elements.actionHint.textContent = waiting
+            ? "等待房主开始游戏。玩家变化会自动刷新。"
+            : "";
     }
 
-    elements.leaveRoomButton.disabled =
-        !state.currentPlayer;
+    elements.leaveRoomButton.disabled = !waiting || !state.currentPlayer;
 }
 
+function handleRoomState(game) {
+    if (state.redirecting) return;
+
+    if (game.status === "RUNNING") {
+        state.redirecting = true;
+        stopPolling();
+        location.replace(gameUrl());
+        return;
+    }
+
+    if (game.status === "ABORTED") {
+        state.redirecting = true;
+        stopPolling();
+
+        showMessage(
+            "房间已解散",
+            "房主已经解散这个房间，即将返回主页。",
+            () => location.replace("/home.html")
+        );
+
+        setTimeout(() => location.replace("/home.html"), 2500);
+        return;
+    }
+
+    if (game.status === "FINISHED") {
+        state.redirecting = true;
+        stopPolling();
+        showMessage(
+            "比赛已结束",
+            "该比赛已经结束，即将返回主页。",
+            () => location.replace("/home.html")
+        );
+        setTimeout(() => location.replace("/home.html"), 2500);
+    }
+}
 
 function renderRoom(roomAndPlayers) {
-    const game =
-        roomAndPlayers.game;
+    const game = roomAndPlayers?.game;
+    const players = Array.isArray(roomAndPlayers?.playerlist)
+        ? roomAndPlayers.playerlist
+        : [];
 
-    const playerlist =
-        Array.isArray(roomAndPlayers.playerlist)
-            ? roomAndPlayers.playerlist
-            : [];
-
-    if (!game) {
-        throw new Error(
-            "房间信息中缺少 game"
-        );
-    }
+    if (!game) throw new Error("房间返回内容中缺少 game");
 
     state.roomAndPlayers = roomAndPlayers;
 
-    const playerCount =
-        game.playerCount ?? playerlist.length;
+    const activePlayers = players.filter(player => player.status === "ACTIVE");
+    const owner = players.find(player => Number(player.seatNo) === 1);
 
-    elements.gameIdText.textContent =
-        game.id;
+    elements.gameIdText.textContent = game.id;
+    elements.playerCountText.textContent = `当前 ${activePlayers.length} 名玩家`;
+    elements.roomStatusText.textContent = statusText(game.status);
+    elements.ownerText.textContent = owner ? playerDisplayName(owner) : "-";
+    elements.currentPlayersText.textContent = activePlayers.length;
+    elements.currentRoundText.textContent = game.currentRound ?? "-";
+    elements.maxRoundText.textContent = game.maxRound ?? "-";
 
-    elements.playerCountText.textContent =
-        `当前 ${playerCount} 名玩家`;
-
-    elements.roomStatusText.textContent =
-        getGameStatusText(game.status);
-
-    elements.currentPlayersText.textContent =
-        playerCount;
-
-    elements.currentRoundText.textContent =
-        game.currentRound ?? "-";
-
-    elements.maxRoundText.textContent =
-        game.maxRound ?? "-";
-
-    const owner =
-        playerlist.find(
-            player =>
-                Number(player.seatNo) === 1
-        );
-
-    elements.ownerText.textContent =
-        owner
-            ? `玩家 ${owner.userId}`
-            : "-";
-
-    if (game.status === "WAITING") {
-        elements.roomDescription.textContent =
-            "等待其他玩家加入房间";
-
-    } else if (
-        game.status === "RUNNING" ||
-        game.status === "IN_PROGRESS"
-    ) {
-        elements.roomDescription.textContent =
-            "比赛正在进行中";
-
-    } else if (game.status === "FINISHED") {
-        elements.roomDescription.textContent =
-            "比赛已经结束";
-
-    } else {
-        elements.roomDescription.textContent =
-            "房间已经解散";
-    }
+    elements.roomDescription.textContent = {
+        WAITING: "等待其他玩家加入，房间成员会自动刷新",
+        RUNNING: "比赛已经开始，正在进入游戏页面",
+        FINISHED: "比赛已经结束",
+        ABORTED: "房间已经被房主解散"
+    }[game.status] || "房间状态未知";
 
     updateStatusBadge(game.status);
-    renderPlayers(playerlist);
-    updateRoomActions(game, playerlist);
+    renderPlayers(players);
+    renderActions(game, players);
+    handleRoomState(game);
 }
-
 
 async function loadCurrentUser() {
-    const result = await request(
-        API.currentUser
-    );
-
-    if (!result.success) {
-        throw new Error("用户未登录");
-    }
-
-    state.userId = result.userId
-        ? Number(result.userId)
-        : null;
-
-    state.username = result.username;
-    state.nickname = result.nickname;
-
-    elements.nicknameText.textContent =
-        result.nickname ||
-        result.username ||
-        "玩家";
+    const result = await request(API.currentUser);
+    state.userId = Number(result.userId);
+    elements.nicknameText.textContent = result.nickname || result.username || "玩家";
 }
 
-
-/**
- * 查询房间。
- *
- * 后端返回：
- * result.roomAndPlayers.game
- * result.roomAndPlayers.playerlist
- */
 async function loadRoom(showError = true) {
-    if (state.loadingRoom) {
-        return false;
-    }
+    if (state.loading || state.redirecting) return;
 
-    state.loadingRoom = true;
+    state.loading = true;
     elements.refreshButton.disabled = true;
 
     try {
-        const result = await request(
-            API.roomDetail(state.gameId)
-        );
-
+        const result = await request(API.room(state.gameId));
         if (!result.roomAndPlayers) {
-            throw new Error(
-                result.message ||
-                "服务器没有返回 roomAndPlayers"
-            );
+            throw new Error("服务器没有返回房间信息");
         }
-
         renderRoom(result.roomAndPlayers);
-
-        return true;
-
     } catch (error) {
-        console.error(
-            "加载房间失败：",
-            error
-        );
-
         if (error.status === 401) {
             location.replace("/");
-            return false;
+            return;
         }
 
-        if (showError) {
-            showMessage(
-                "加载房间失败",
-                error.message
-            );
+        if (error.status === 403 || error.status === 404) {
+            stopPolling();
+            showMessage("无法进入房间", error.message, () => location.replace("/home.html"));
+            return;
         }
 
-        return false;
-
+        if (showError) showMessage("加载房间失败", error.message);
     } finally {
-        state.loadingRoom = false;
+        state.loading = false;
         elements.refreshButton.disabled = false;
     }
 }
-
 
 async function startGame() {
     elements.startGameButton.disabled = true;
 
     try {
-        const result = await request(
-            API.startGame(state.gameId),
-            {
-                method: "POST"
-            }
-        );
-
-        showMessage(
-            "开始比赛",
-            result.message || "比赛开始成功"
-        );
-
-        await loadRoom(false);
-
-        /*
-         * 游戏页面完成后，可以在这里跳转：
-         *
-         * location.href =
-         *     `/game.html?gameId=${state.gameId}`;
-         */
-
+        const result = await request(API.start(state.gameId), {method: "POST"});
+        location.replace(result.redirectUrl || gameUrl());
     } catch (error) {
-        showMessage(
-            "开始比赛失败",
-            error.message
-        );
-
-    } finally {
+        showMessage("开始游戏失败", error.message);
         elements.startGameButton.disabled = false;
     }
 }
 
-
 async function leaveOrAbortRoom() {
-    if (!state.currentPlayer) {
-        showMessage(
-            "操作失败",
-            "当前用户不在这个房间中"
-        );
+    const owner = Number(state.currentPlayer?.seatNo) === 1;
+    const actionName = owner ? "解散房间" : "离开房间";
 
-        return;
-    }
-
-    const currentUserIsOwner =
-        Number(state.currentPlayer.seatNo) === 1;
-
-    const actionName =
-        currentUserIsOwner
-            ? "解散房间"
-            : "离开房间";
-
-    const confirmed = window.confirm(
-        `确定要${actionName}吗？`
-    );
-
-    if (!confirmed) {
-        return;
-    }
+    if (!window.confirm(`确定要${actionName}吗？`)) return;
 
     elements.leaveRoomButton.disabled = true;
 
     try {
-        const url = currentUserIsOwner
-            ? API.abortRoom(state.gameId)
-            : API.leaveRoom(state.gameId);
-
-        await request(
-            url,
-            {
-                method: "POST"
-            }
+        const result = await request(
+            owner ? API.abort(state.gameId) : API.leave(state.gameId),
+            {method: "POST"}
         );
-
-        location.replace("/home.html");
-
+        location.replace(result.redirectUrl || "/home.html");
     } catch (error) {
-        showMessage(
-            `${actionName}失败`,
-            error.message
-        );
-
+        showMessage(`${actionName}失败`, error.message);
         elements.leaveRoomButton.disabled = false;
     }
 }
-
 
 async function logout() {
     elements.logoutButton.disabled = true;
 
     try {
-        await request(
-            API.logout,
-            {
-                method: "POST"
-            }
-        );
-
+        await request(API.logout, {method: "POST"});
         location.replace("/");
-
     } catch (error) {
-        showMessage(
-            "退出登录失败",
-            error.message
-        );
-
+        showMessage("退出登录失败", error.message);
         elements.logoutButton.disabled = false;
     }
 }
 
-
-async function initializePage() {
+async function initialize() {
     state.gameId = getGameIdFromUrl();
-
     if (!state.gameId) {
         location.replace("/home.html");
         return;
@@ -711,90 +389,25 @@ async function initializePage() {
 
     try {
         await loadCurrentUser();
-
-    } catch (error) {
-        console.error(error);
-        location.replace("/");
-        return;
-    }
-
-    document.body.hidden = false;
-
-    const loaded =
+        document.body.hidden = false;
         await loadRoom(true);
 
-    if (loaded) {
-        /*
-         * 每三秒查询一次最新房间信息。
-         */
-        state.refreshTimer = setInterval(
-            function () {
-                loadRoom(false);
-            },
-            3000
+        state.pollingTimer = setInterval(
+            () => loadRoom(false),
+            2000
         );
+    } catch {
+        location.replace("/");
     }
 }
 
+elements.homeButton.addEventListener("click", () => location.href = "/home.html");
+elements.logoutButton.addEventListener("click", logout);
+elements.refreshButton.addEventListener("click", () => loadRoom(true));
+elements.startGameButton.addEventListener("click", startGame);
+elements.leaveRoomButton.addEventListener("click", leaveOrAbortRoom);
+elements.closeMessageButton.addEventListener("click", closeMessage);
 
-elements.homeButton.addEventListener(
-    "click",
-    function () {
-        location.href = "/home.html";
-    }
-);
+window.addEventListener("beforeunload", stopPolling);
 
-
-elements.logoutButton.addEventListener(
-    "click",
-    logout
-);
-
-
-elements.refreshButton.addEventListener(
-    "click",
-    function () {
-        loadRoom(true);
-    }
-);
-
-
-elements.startGameButton.addEventListener(
-    "click",
-    startGame
-);
-
-
-elements.leaveRoomButton.addEventListener(
-    "click",
-    leaveOrAbortRoom
-);
-
-
-elements.closeMessageButton.addEventListener(
-    "click",
-    closeMessage
-);
-
-
-elements.messageModal.addEventListener(
-    "click",
-    function (event) {
-        if (event.target === elements.messageModal) {
-            closeMessage();
-        }
-    }
-);
-
-
-window.addEventListener(
-    "beforeunload",
-    function () {
-        if (state.refreshTimer) {
-            clearInterval(state.refreshTimer);
-        }
-    }
-);
-
-
-initializePage();
+initialize();

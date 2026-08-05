@@ -1,128 +1,119 @@
 package phonemarket.service;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import phonemarket.dto.ActiveGamesResponse;
 import phonemarket.dto.RoomAndPlayers;
 import phonemarket.dto.RoomResultResponse;
-import phonemarket.entity.Game;
-import phonemarket.entity.GamePlayer;
-import phonemarket.mapper.GameMapper;
-
-import java.util.List;
 
 @Service
 public class HomeService {
 
-    private final GameMapper gameMapper;
     private final GameService gameService;
 
-    public HomeService(
-            GameMapper gameMapper,
-            GameService gameService
-    ) {
-        this.gameMapper = gameMapper;
+    public HomeService(GameService gameService) {
         this.gameService = gameService;
     }
 
-
     @Transactional
     public RoomResultResponse create(long userId) {
+        gameService.abortOwnedWaitingRooms(userId);
 
-        RoomResultResponse response =
-                new RoomResultResponse();
-
-        try {
-            /*
-             * createGame 应该同时完成：
-             *
-             * 1. 创建 game
-             * 2. 创建 game_player
-             * 3. 将当前用户设为 1 号座位
-             */
-            RoomAndPlayers createdRoom =
-                    gameService.createGame(userId);
-
-            if (createdRoom == null
-                    || createdRoom.getGame() == null) {
-
-                response.setSuccess(false);
-                response.setMessage("创建房间失败");
-                return response;
-            }
-
-            long gameId =
-                    createdRoom.getGame().getId();
-
-            /*
-             * 再查询一次完整的房间信息。
-             */
-            RoomAndPlayers roomAndPlayers =
-                    gameService.getRoomDetail(gameId);
-
-            if (roomAndPlayers == null) {
-                response.setSuccess(false);
-                response.setMessage("创建成功，但读取房间信息失败");
-                return response;
-            }
-
-            response.setSuccess(true);
-            response.setMessage("创建成功");
-            response.setRoomAndPlayers(roomAndPlayers);
-
-            return response;
-
-        } catch (Exception exception) {
-            response.setSuccess(false);
-            response.setMessage(
-                    exception.getMessage() != null
-                            ? exception.getMessage()
-                            : "创建房间失败"
-            );
-
-            return response;
-        }
+        RoomAndPlayers room = gameService.createGame(userId);
+        return roomSuccess(
+                "创建房间成功",
+                room,
+                roomUrl(room.getGame().getId())
+        );
     }
 
+    @Transactional
+    public RoomResultResponse join(long gameId, long userId) {
+        RoomAndPlayers room = gameService.joinGame(userId, gameId);
+        return roomSuccess(
+                "加入房间成功",
+                room,
+                roomUrl(gameId)
+        );
+    }
 
     @Transactional(readOnly = true)
-    public RoomResultResponse getRoom(
-            long gameId,
-            long userId
-    ) {
-        RoomResultResponse response =
-                new RoomResultResponse();
-
-        RoomAndPlayers roomAndPlayers =
-                gameService.getRoomDetail(gameId);
-
-        if (roomAndPlayers == null
-                || roomAndPlayers.getGame() == null) {
-
-            response.setSuccess(false);
-            response.setMessage("未找到房间");
-            return response;
+    public RoomResultResponse getRoom(long gameId, long userId) {
+        if (!gameService.hasMembership(userId, gameId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "当前用户不属于这个房间"
+            );
         }
 
-        List<GamePlayer> playerList =
-                roomAndPlayers.getPlayerlist();
+        return roomSuccess(
+                "获取房间成功",
+                gameService.getRoomDetail(gameId),
+                null
+        );
+    }
 
-        boolean userIsInRoom =
-                playerList != null
-                        && playerList.stream().anyMatch(
-                        player ->
-                                player.getUserId() == userId
-                );
+    @Transactional
+    public RoomResultResponse leave(long gameId, long userId) {
+        gameService.leaveGame(userId, gameId);
 
-        if (!userIsInRoom) {
-            response.setSuccess(false);
-            response.setMessage("当前用户不在这个房间中");
-            return response;
-        }
-
+        RoomResultResponse response = new RoomResultResponse();
         response.setSuccess(true);
-        response.setMessage("已找到房间");
-        response.setRoomAndPlayers(roomAndPlayers);
-
+        response.setMessage("离开房间成功");
+        response.setRedirectUrl("/home.html");
         return response;
+    }
+
+    @Transactional
+    public RoomResultResponse abort(long gameId, long userId) {
+        RoomAndPlayers room = gameService.abortGame(userId, gameId);
+        return roomSuccess(
+                "房间已解散",
+                room,
+                "/home.html"
+        );
+    }
+
+    @Transactional
+    public RoomResultResponse start(long gameId, long userId) {
+        gameService.startGame(userId, gameId);
+
+        return roomSuccess(
+                "游戏开始成功",
+                gameService.getRoomDetail(gameId),
+                gameUrl(gameId)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public ActiveGamesResponse getActiveGames(long userId) {
+        ActiveGamesResponse response = new ActiveGamesResponse();
+        response.setSuccess(true);
+        response.setMessage("获取参与中的比赛成功");
+        response.setGames(gameService.getActiveGames(userId));
+        return response;
+    }
+
+    private RoomResultResponse roomSuccess(
+            String message,
+            RoomAndPlayers room,
+            String redirectUrl
+    ) {
+        RoomResultResponse response = new RoomResultResponse();
+        response.setSuccess(true);
+        response.setMessage(message);
+        response.setRoomAndPlayers(room);
+        response.setRedirectUrl(redirectUrl);
+        return response;
+    }
+
+    private String roomUrl(long gameId) {
+        return "/room.html?gameId=" + gameId;
+    }
+
+    private String gameUrl(long gameId) {
+        return "/game.html?gameId=" + gameId;
     }
 }

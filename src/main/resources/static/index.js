@@ -1,133 +1,104 @@
+"use strict";
+
 const loginPage = document.getElementById("loginPage");
 const registerPage = document.getElementById("registerPage");
-
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
-
-const goToRegisterButton =
-    document.getElementById("goToRegisterButton");
-
-const backToLoginButton =
-    document.getElementById("backToLoginButton");
-
+const goToRegisterButton = document.getElementById("goToRegisterButton");
+const backToLoginButton = document.getElementById("backToLoginButton");
 const message = document.getElementById("message");
-
 
 function showLoginPage() {
     loginPage.classList.remove("hidden");
     registerPage.classList.add("hidden");
-
     message.textContent = "";
 }
-
 
 function showRegisterPage() {
     loginPage.classList.add("hidden");
     registerPage.classList.remove("hidden");
-
     message.textContent = "";
 }
 
+async function request(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options
+    });
 
-goToRegisterButton.addEventListener(
-    "click",
-    showRegisterPage
-);
+    const text = await response.text();
+    let body = {};
 
+    if (text) {
+        try {
+            body = JSON.parse(text);
+        } catch {
+            body = {message: text};
+        }
+    }
 
-backToLoginButton.addEventListener(
-    "click",
-    showLoginPage
-);
+    if (!response.ok || body.success === false) {
+        throw new Error(body.message || `请求失败：${response.status}`);
+    }
 
+    return body;
+}
 
-loginForm.addEventListener("submit", async function (event) {
+goToRegisterButton.addEventListener("click", showRegisterPage);
+backToLoginButton.addEventListener("click", showLoginPage);
+
+loginForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const username =
-        document.getElementById("loginUsername").value.trim();
-
-    const password =
-        document.getElementById("loginPassword").value;
+    const username = document.getElementById("loginUsername").value.trim();
+    const passwordInput = document.getElementById("loginPassword");
 
     try {
         message.textContent = "正在登录……";
 
-        const response = await fetch("/api/auth/login", {
+        const result = await request("/api/auth/login", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 username,
-                password
+                password: passwordInput.value
             })
         });
 
-        const result = await response.json();
-
-        if (!result.success) {
-            message.textContent =
-                result.message;
-
-            document.getElementById("loginPassword").value = "";
-            return;
-        }
-
         message.textContent = result.message;
-
-        location.href = "/home.html";
-
+        location.replace("/home.html");
     } catch (error) {
-        console.error(error);
-        message.textContent = "无法连接服务器";
+        passwordInput.value = "";
+        message.textContent = error.message;
     }
 });
 
-
-
-
-registerForm.addEventListener("submit", async function (event) {
+registerForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const nickname =
-        document.getElementById("registerNickname").value.trim();
-
-    const username =
-        document.getElementById("registerUsername").value.trim();
-
-    const password =
-        document.getElementById("registerPassword").value;
-
-    const registerData = {
-        nickname,
-        username,
-        password
-    };
+    const nickname = document.getElementById("registerNickname").value.trim();
+    const username = document.getElementById("registerUsername").value.trim();
+    const passwordInput = document.getElementById("registerPassword");
 
     try {
         message.textContent = "正在注册……";
 
-        const response = await fetch("/api/auth/register", {
+        const result = await request("/api/auth/register", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(registerData)
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                nickname,
+                username,
+                password: passwordInput.value
+            })
         });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            message.textContent = result.message || "注册失败";
-            return;
-        }
-
-        message.textContent =
-            `${result.message}`;
-
+        showLoginPage();
+        document.getElementById("loginUsername").value = username;
+        document.getElementById("loginPassword").value = "";
+        passwordInput.value = "";
+        message.textContent = result.message;
     } catch (error) {
-        console.error(error);
-        message.textContent = "无法连接服务器";
+        message.textContent = error.message;
     }
 });

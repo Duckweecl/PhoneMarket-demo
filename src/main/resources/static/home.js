@@ -1,476 +1,413 @@
 "use strict";
 
-
 const API = {
     currentUser: "/api/auth/me",
     logout: "/api/auth/logout",
-
-    createGame: "/api/games/create",
-
-    joinGame: gameId =>
-        `/api/games/${gameId}/join`,
-
-    /*
-     * 以下功能暂时没有实际接口。
-     */
+    updateUsername: "/api/auth/username",
     activeGames: "/api/games/mine/active",
-    updateNickname: "/api/auth/nickname",
-    history: "/api/games/mine/history",
-    watchableGames: "/api/games/watchable"
+    createGame: "/api/games/create",
+    joinGame: gameId => `/api/games/${gameId}/join`
 };
-
 
 const state = {
     userId: null,
     username: null,
-    nickname: null
+    nickname: null,
+    activeGames: [],
+    activeGamesExpanded: false,
+    activeGamesTimer: null
 };
 
+const elements = Object.fromEntries([
+    "nicknameText",
+    "usernameText",
+    "welcomeText",
+    "changeUsernameButton",
+    "logoutButton",
+    "refreshActiveGamesButton",
+    "activeGameList",
+    "activeGameEmpty",
+    "toggleActiveGamesButton",
+    "createGameButton",
+    "joinGameButton",
+    "historyButton",
+    "watchGameButton",
+    "joinModal",
+    "joinGameForm",
+    "joinGameId",
+    "joinInputMessage",
+    "closeJoinModalButton",
+    "cancelJoinButton",
+    "confirmJoinButton",
+    "usernameModal",
+    "usernameForm",
+    "newUsername",
+    "usernameInputMessage",
+    "closeUsernameModalButton",
+    "cancelUsernameButton",
+    "confirmUsernameButton",
+    "messageModal",
+    "messageTitle",
+    "messageText",
+    "closeMessageButton"
+].map(id => [id, document.getElementById(id)]));
 
-const elements = {
-    nicknameText:
-        document.getElementById("nicknameText"),
-
-    welcomeText:
-        document.getElementById("welcomeText"),
-
-    changeNicknameButton:
-        document.getElementById("changeNicknameButton"),
-
-    logoutButton:
-        document.getElementById("logoutButton"),
-
-    createGameButton:
-        document.getElementById("createGameButton"),
-
-    joinGameButton:
-        document.getElementById("joinGameButton"),
-
-    historyButton:
-        document.getElementById("historyButton"),
-
-    watchGameButton:
-        document.getElementById("watchGameButton"),
-
-    joinModal:
-        document.getElementById("joinModal"),
-
-    joinGameForm:
-        document.getElementById("joinGameForm"),
-
-    joinGameId:
-        document.getElementById("joinGameId"),
-
-    joinInputMessage:
-        document.getElementById("joinInputMessage"),
-
-    closeJoinModalButton:
-        document.getElementById("closeJoinModalButton"),
-
-    cancelJoinButton:
-        document.getElementById("cancelJoinButton"),
-
-    confirmJoinButton:
-        document.getElementById("confirmJoinButton"),
-
-    messageModal:
-        document.getElementById("messageModal"),
-
-    messageTitle:
-        document.getElementById("messageTitle"),
-
-    messageText:
-        document.getElementById("messageText"),
-
-    closeMessageButton:
-        document.getElementById("closeMessageButton")
-};
-
-
-/**
- * 统一发送请求。
- */
 async function request(url, options = {}) {
-    const {
-        headers = {},
-        ...otherOptions
-    } = options;
-
     const response = await fetch(url, {
         credentials: "same-origin",
-
-        ...otherOptions,
-
+        ...options,
         headers: {
             Accept: "application/json",
-            ...headers
+            ...(options.headers || {})
         }
     });
 
-    const responseText = await response.text();
+    const text = await response.text();
+    let body = {};
 
-    let result = {};
-
-    if (responseText) {
+    if (text) {
         try {
-            result = JSON.parse(responseText);
-        } catch (error) {
-            result = {
-                message: responseText
-            };
+            body = JSON.parse(text);
+        } catch {
+            body = {message: text};
         }
     }
 
-    if (!response.ok || result.success === false) {
-        const requestError = new Error(
-            result.message ||
-            result.detail ||
-            result.error ||
-            `请求失败，状态码：${response.status}`
+    if (!response.ok || body.success === false) {
+        const error = new Error(
+            body.message || body.detail || `请求失败：${response.status}`
         );
-
-        requestError.status = response.status;
-
-        throw requestError;
+        error.status = response.status;
+        throw error;
     }
 
-    return result;
+    return body;
 }
-
 
 function showMessage(title, text) {
     elements.messageTitle.textContent = title;
     elements.messageText.textContent = text;
-
     elements.messageModal.classList.remove("hidden");
 }
-
 
 function closeMessage() {
     elements.messageModal.classList.add("hidden");
 }
 
-
 function openJoinModal() {
     elements.joinGameId.value = "";
     elements.joinInputMessage.textContent = "";
-
     elements.joinModal.classList.remove("hidden");
-
     elements.joinGameId.focus();
 }
-
 
 function closeJoinModal() {
     elements.joinModal.classList.add("hidden");
 }
 
+function openUsernameModal() {
+    elements.newUsername.value = state.username || "";
+    elements.usernameInputMessage.textContent = "";
+    elements.usernameModal.classList.remove("hidden");
+    elements.newUsername.focus();
+    elements.newUsername.select();
+}
 
-/**
- * RoomResultResponse 中：
- *
- * result.roomAndPlayers.game.id
- */
-function getGameId(result) {
-    const gameId = Number(
-        result?.roomAndPlayers?.game?.id
-    );
+function closeUsernameModal() {
+    elements.usernameModal.classList.add("hidden");
+}
 
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-        throw new Error(
-            result?.message ||
-            "服务器没有返回有效的房间号"
-        );
+function handleUnauthorized(error) {
+    if (error.status === 401) {
+        location.replace("/");
+        return true;
     }
+    return false;
+}
 
+function roomUrl(gameId) {
+    return `/room.html?gameId=${encodeURIComponent(gameId)}`;
+}
+
+function gameUrl(gameId) {
+    return `/game.html?gameId=${encodeURIComponent(gameId)}`;
+}
+
+function getGameId(result) {
+    const gameId = Number(result?.roomAndPlayers?.game?.id);
+    if (!Number.isInteger(gameId) || gameId <= 0) {
+        throw new Error("服务器没有返回有效的房间号");
+    }
     return gameId;
 }
 
+async function loadCurrentUser() {
+    const result = await request(API.currentUser);
 
-function goToRoom(gameId) {
-    location.href =
-        `/room.html?gameId=${encodeURIComponent(gameId)}`;
+    state.userId = Number(result.userId);
+    state.username = result.username;
+    state.nickname = result.nickname;
+
+    const displayName = result.nickname || result.username || "玩家";
+    elements.nicknameText.textContent = displayName;
+    elements.usernameText.textContent = `@${result.username}`;
+    elements.welcomeText.textContent = `欢迎，${displayName}`;
 }
 
+function statusText(status) {
+    return {
+        WAITING: "等待开始",
+        RUNNING: "进行中"
+    }[status] || status || "未知状态";
+}
 
-/**
- * 检查登录并显示当前用户。
- */
-async function loadCurrentUser() {
+function createActiveGameCard(game) {
+    const card = document.createElement("article");
+    card.className = "active-game-card";
+
+    const main = document.createElement("div");
+    main.className = "active-game-main";
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "active-game-title-row";
+
+    const title = document.createElement("strong");
+    title.textContent = `比赛 #${game.gameId}`;
+    titleRow.appendChild(title);
+
+    const status = document.createElement("span");
+    status.className = `status-badge ${game.status === "RUNNING" ? "running" : "waiting"}`;
+    status.textContent = statusText(game.status);
+    titleRow.appendChild(status);
+
+    if (game.owner) {
+        const owner = document.createElement("span");
+        owner.className = "owner-badge";
+        owner.textContent = "房主";
+        titleRow.appendChild(owner);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "active-game-meta";
+    meta.innerHTML = `
+        <span>座位 ${escapeHtml(game.seatNo ?? "-")}</span>
+        <span>玩家 ${escapeHtml(game.playerCount ?? 0)} / 4</span>
+        <span>回合 ${escapeHtml(game.currentRound ?? 1)} / ${escapeHtml(game.maxRound ?? 10)}</span>
+    `;
+
+    main.appendChild(titleRow);
+    main.appendChild(meta);
+
+    const enterButton = document.createElement("button");
+    enterButton.className = "primary-button";
+    enterButton.type = "button";
+    enterButton.textContent = game.status === "RUNNING" ? "重新进入游戏" : "重新进入房间";
+    enterButton.addEventListener("click", () => {
+        location.href = game.status === "RUNNING"
+            ? gameUrl(game.gameId)
+            : roomUrl(game.gameId);
+    });
+
+    card.appendChild(main);
+    card.appendChild(enterButton);
+    return card;
+}
+
+function renderActiveGames() {
+    elements.activeGameList.replaceChildren();
+
+    const games = state.activeGames || [];
+    elements.activeGameEmpty.classList.toggle("hidden", games.length > 0);
+
+    const visibleGames = state.activeGamesExpanded
+        ? games
+        : games.slice(0, 3);
+
+    for (const game of visibleGames) {
+        elements.activeGameList.appendChild(createActiveGameCard(game));
+    }
+
+    const hasMore = games.length > 3;
+    elements.toggleActiveGamesButton.classList.toggle("hidden", !hasMore);
+    elements.toggleActiveGamesButton.textContent = state.activeGamesExpanded
+        ? "收起"
+        : `展开另外 ${games.length - 3} 场比赛`;
+}
+
+async function loadActiveGames(showError = false) {
+    elements.refreshActiveGamesButton.disabled = true;
+
     try {
-        const result = await request(
-            API.currentUser
-        );
-
-        if (!result.success) {
-            location.replace("/");
-            return;
-        }
-
-        state.userId = result.userId
-            ? Number(result.userId)
-            : null;
-
-        state.username = result.username;
-        state.nickname = result.nickname;
-
-        const displayName =
-            result.nickname ||
-            result.username ||
-            "玩家";
-
-        elements.nicknameText.textContent =
-            displayName;
-
-        elements.welcomeText.textContent =
-            `欢迎，${displayName}`;
-
-        document.body.hidden = false;
-
+        const result = await request(API.activeGames);
+        state.activeGames = Array.isArray(result.games) ? result.games : [];
+        renderActiveGames();
     } catch (error) {
-        console.error(
-            "读取当前用户失败：",
-            error
-        );
-
-        location.replace("/");
+        if (handleUnauthorized(error)) return;
+        if (showError) showMessage("读取比赛失败", error.message);
+    } finally {
+        elements.refreshActiveGamesButton.disabled = false;
     }
 }
 
-
-/**
- * 创建房间。
- *
- * 后端从 Session 取得 userId，
- * 前端不发送 userId。
- */
 async function createGame() {
     elements.createGameButton.disabled = true;
 
     try {
-        const result = await request(
-            API.createGame,
-            {
-                method: "POST"
-            }
-        );
-
+        const result = await request(API.createGame, {method: "POST"});
         const gameId = getGameId(result);
-
-        goToRoom(gameId);
-
+        location.href = result.redirectUrl || roomUrl(gameId);
     } catch (error) {
-        if (error.status === 401) {
-            location.replace("/");
-            return;
+        if (!handleUnauthorized(error)) {
+            showMessage("创建房间失败", error.message);
         }
-
-        showMessage(
-            "创建房间失败",
-            error.message
-        );
-
     } finally {
         elements.createGameButton.disabled = false;
     }
 }
 
-
-/**
- * 加入房间。
- */
 async function joinGame(gameId) {
-    elements.joinGameButton.disabled = true;
     elements.confirmJoinButton.disabled = true;
-
-    /*
-     * 用户确认加入后先关闭输入弹窗。
-     */
     closeJoinModal();
 
     try {
-        const result = await request(
-            API.joinGame(gameId),
-            {
-                method: "POST"
-            }
-        );
-
+        const result = await request(API.joinGame(gameId), {method: "POST"});
         const returnedGameId = getGameId(result);
-
-        goToRoom(returnedGameId);
-
+        location.href = result.redirectUrl || roomUrl(returnedGameId);
     } catch (error) {
-        if (error.status === 401) {
-            location.replace("/");
-            return;
+        if (!handleUnauthorized(error)) {
+            showMessage("加入房间失败", error.message);
         }
-
-        showMessage(
-            "加入房间失败",
-            error.message
-        );
-
     } finally {
-        elements.joinGameButton.disabled = false;
         elements.confirmJoinButton.disabled = false;
     }
 }
 
+async function updateUsername(username) {
+    elements.confirmUsernameButton.disabled = true;
 
-/**
- * 退出登录。
- */
+    try {
+        const result = await request(API.updateUsername, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({username})
+        });
+
+        state.username = result.username;
+        elements.usernameText.textContent = `@${result.username}`;
+        closeUsernameModal();
+        showMessage("修改成功", result.message);
+    } catch (error) {
+        if (handleUnauthorized(error)) return;
+        elements.usernameInputMessage.textContent = error.message;
+    } finally {
+        elements.confirmUsernameButton.disabled = false;
+    }
+}
+
 async function logout() {
     elements.logoutButton.disabled = true;
 
     try {
-        await request(
-            API.logout,
-            {
-                method: "POST"
-            }
-        );
-
+        await request(API.logout, {method: "POST"});
         location.replace("/");
-
     } catch (error) {
-        showMessage(
-            "退出登录失败",
-            error.message
-        );
-
+        showMessage("退出登录失败", error.message);
         elements.logoutButton.disabled = false;
     }
 }
 
+async function initialize() {
+    try {
+        await loadCurrentUser();
+        document.body.hidden = false;
+        await loadActiveGames(true);
 
-elements.createGameButton.addEventListener(
-    "click",
-    createGame
-);
-
-
-elements.joinGameButton.addEventListener(
-    "click",
-    openJoinModal
-);
-
-
-elements.closeJoinModalButton.addEventListener(
-    "click",
-    closeJoinModal
-);
-
-
-elements.cancelJoinButton.addEventListener(
-    "click",
-    closeJoinModal
-);
-
-
-elements.joinGameForm.addEventListener(
-    "submit",
-    function (event) {
-        event.preventDefault();
-
-        const gameId =
-            Number(elements.joinGameId.value);
-
-        if (!Number.isInteger(gameId)
-            || gameId <= 0) {
-            elements.joinInputMessage.textContent =
-                "请输入有效的房间号";
-
-            return;
-        }
-
-        elements.joinInputMessage.textContent = "";
-
-        joinGame(gameId);
-    }
-);
-
-
-elements.changeNicknameButton.addEventListener(
-    "click",
-    function () {
-        showMessage(
-            "修改昵称",
-            "修改昵称功能暂未实现。\n预留接口：PUT /api/auth/nickname"
+        state.activeGamesTimer = setInterval(
+            () => loadActiveGames(false),
+            5000
         );
+    } catch (error) {
+        location.replace("/");
     }
-);
+}
 
+elements.createGameButton.addEventListener("click", createGame);
+elements.joinGameButton.addEventListener("click", openJoinModal);
+elements.changeUsernameButton.addEventListener("click", openUsernameModal);
+elements.logoutButton.addEventListener("click", logout);
+elements.refreshActiveGamesButton.addEventListener("click", () => loadActiveGames(true));
 
-elements.historyButton.addEventListener(
-    "click",
-    function () {
-        showMessage(
-            "比赛记录",
-            "比赛记录功能暂未实现。\n预留接口：GET /api/games/mine/history"
-        );
+elements.toggleActiveGamesButton.addEventListener("click", () => {
+    state.activeGamesExpanded = !state.activeGamesExpanded;
+    renderActiveGames();
+});
+
+elements.joinGameForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const gameId = Number(elements.joinGameId.value);
+
+    if (!Number.isInteger(gameId) || gameId <= 0) {
+        elements.joinInputMessage.textContent = "请输入有效的房间号";
+        return;
     }
-);
 
+    elements.joinInputMessage.textContent = "";
+    joinGame(gameId);
+});
 
-elements.watchGameButton.addEventListener(
-    "click",
-    function () {
-        showMessage(
-            "观看比赛",
-            "观看比赛功能暂未实现。\n预留接口：GET /api/games/watchable"
-        );
+elements.usernameForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const username = elements.newUsername.value.trim();
+
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username)) {
+        elements.usernameInputMessage.textContent = "用户名格式不正确";
+        return;
     }
-);
 
+    elements.usernameInputMessage.textContent = "";
+    updateUsername(username);
+});
 
-elements.logoutButton.addEventListener(
-    "click",
-    logout
-);
+elements.historyButton.addEventListener("click", () => {
+    showMessage("比赛记录", "比赛记录功能暂未实现。接口位置已经保留。 ");
+});
 
+elements.watchGameButton.addEventListener("click", () => {
+    showMessage("观看比赛", "观看比赛功能暂未实现。接口位置已经保留。 ");
+});
 
-elements.closeMessageButton.addEventListener(
-    "click",
-    closeMessage
-);
+[
+    [elements.closeJoinModalButton, closeJoinModal],
+    [elements.cancelJoinButton, closeJoinModal],
+    [elements.closeUsernameModalButton, closeUsernameModal],
+    [elements.cancelUsernameButton, closeUsernameModal],
+    [elements.closeMessageButton, closeMessage]
+].forEach(([button, handler]) => button.addEventListener("click", handler));
 
+[elements.joinModal, elements.usernameModal, elements.messageModal]
+    .forEach(modal => modal.addEventListener("click", event => {
+        if (event.target !== modal) return;
+        modal.classList.add("hidden");
+    }));
 
-/**
- * 点击弹窗背景时关闭。
- */
-elements.joinModal.addEventListener(
-    "click",
-    function (event) {
-        if (event.target === elements.joinModal) {
-            closeJoinModal();
-        }
-    }
-);
+document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    closeJoinModal();
+    closeUsernameModal();
+    closeMessage();
+});
 
+window.addEventListener("beforeunload", () => {
+    if (state.activeGamesTimer) clearInterval(state.activeGamesTimer);
+});
 
-elements.messageModal.addEventListener(
-    "click",
-    function (event) {
-        if (event.target === elements.messageModal) {
-            closeMessage();
-        }
-    }
-);
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
 
-
-document.addEventListener(
-    "keydown",
-    function (event) {
-        if (event.key !== "Escape") {
-            return;
-        }
-
-        closeJoinModal();
-        closeMessage();
-    }
-);
-
-
-loadCurrentUser();
+initialize();

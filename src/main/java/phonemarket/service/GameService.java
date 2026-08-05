@@ -4,141 +4,108 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import phonemarket.dto.GameAndPlayer;
+import phonemarket.dto.ActiveGameItem;
 import phonemarket.dto.GameRoundOverviewResponse;
 import phonemarket.dto.RoomAndPlayers;
 import phonemarket.entity.Game;
 import phonemarket.entity.GamePlayer;
-import phonemarket.entity.Round;
+import phonemarket.mapper.AuthMapper;
 import phonemarket.mapper.GameMapper;
 import phonemarket.mapper.GamePlayerMapper;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 public class GameService {
+
+    private static final int MAX_PLAYERS = 4;
+
     private final GameMapper gameMapper;
-    private final UserService userService;
+    private final AuthMapper authMapper;
     private final GamePlayerMapper gamePlayerMapper;
     private final RoundInitializationService roundInitializationService;
     private final GameRoundOverviewService gameRoundOverviewService;
 
     public GameService(
             GameMapper gameMapper,
-            UserService userService, GamePlayerMapper gamePlayerMapper, RoundInitializationService roundInitializationService, GameRoundOverviewService gameRoundOverviewService) {
+            AuthMapper authMapper,
+            GamePlayerMapper gamePlayerMapper,
+            RoundInitializationService roundInitializationService,
+            GameRoundOverviewService gameRoundOverviewService
+    ) {
         this.gameMapper = gameMapper;
+        this.authMapper = authMapper;
         this.gamePlayerMapper = gamePlayerMapper;
         this.roundInitializationService = roundInitializationService;
-        this.userService = userService;
         this.gameRoundOverviewService = gameRoundOverviewService;
     }
 
     @Transactional
-    public RoomAndPlayers createGame(long id){
-        userService.findUserId(id);
+    public RoomAndPlayers createGame(long userId) {
+        requireUser(userId);
+
         Game game = new Game();
-        RoomAndPlayers roomAndPlayers = new RoomAndPlayers();
         game.setStatus("WAITING");
         game.setCurrentRound(1);
         game.setMaxRound(10);
         game.setPlayerCount(0);
-        gameMapper.insert(game);
-        GamePlayer player = new GamePlayer();
-        player.setGameId(game.getId());
 
-        player.setUserId(id);
-        player.setSeatNo(1);
-        gameMapper.join(player);
-        gameMapper.increasePlayerCount(player.getGameId());
-        List<GamePlayer> list = new ArrayList<>();
-        list.add(player);
-        roomAndPlayers.setGame(gameMapper.Findbygame(game.getId()));
-        roomAndPlayers.setPlayerlist(list);
-        return roomAndPlayers;
+        if (gameMapper.insert(game) != 1) {
+            throw new IllegalStateException("创建游戏记录失败");
+        }
+
+        GamePlayer owner = new GamePlayer();
+        owner.setGameId(game.getId());
+        owner.setUserId(userId);
+        owner.setSeatNo(1);
+
+        if (gameMapper.join(owner) != 1
+                || gameMapper.increasePlayerCount(game.getId()) != 1) {
+            throw new IllegalStateException("创建房主记录失败");
+        }
+
+        return getRoomDetail(game.getId());
     }
 
-
-
-    public GameAndPlayer joinGame(long userId, long gameId) {
-        // 1. 检查用户是否存在
-        userService.findUserId(userId);
-
-        // 2. 检查对局是否存在
+    @Transactional
+    public RoomAndPlayers joinGame(long userId, long gameId) {
+        requireUser(userId);
         Game game = findGame(gameId);
 
-        // 3. 检查对局状态
         if (!"WAITING".equals(game.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "对局已经开始或已经解散"
+                    "房间已经开始或已经解散"
             );
         }
 
-        // 4. 检查玩家是否已经在对局中
-        int count = gameMapper.countPlayer(userId, gameId);
-
-        if (count > 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "玩家已经在该对局中"
-            );
+        if (gameMapper.countPlayer(userId, gameId) > 0) {
+            return getRoomDetail(gameId);
         }
 
-        // 5. 查询当前正在使用的座位
-        java.util.List<Integer> occupiedSeats =
+        List<Integer> occupiedSeats =
                 gameMapper.findActiveSeatNumbers(gameId);
 
-        // 6. 从1～4中寻找第一个空闲座位
-        int availableSeat = 0;
-
-        for (int seat = 1; seat <= 4; seat++) {
-            if (!occupiedSeats.contains(seat)) {
-                availableSeat = seat;
-                break;
-            }
-        }
-
-        // 7. 没有空闲座位，说明房间已满
+        int availableSeat = findAvailableSeat(occupiedSeats);
         if (availableSeat == 0) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "对局人数已满"
+                    "房间人数已满"
             );
         }
 
-        // 8. 创建局内玩家
         GamePlayer player = new GamePlayer();
         player.setGameId(gameId);
         player.setUserId(userId);
         player.setSeatNo(availableSeat);
 
-        // 9. 插入玩家并增加人数
-        gameMapper.join(player);
-        gameMapper.increasePlayerCount(gameId);
-
-        // 10. 返回最新结果
-        GameAndPlayer result = new GameAndPlayer();
-        result.setGame(gameMapper.Findbygame(gameId));
-        result.setPlayer(gameMapper.findPlayer(player.getId()));
-
-        return result;
-    }
-
-    public Game findGame(long id) {
-
-        Game game = gameMapper.Findbygame(id);
-        if (game == null){
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "对局不存在");
+        if (gameMapper.join(player) != 1
+                || gameMapper.increasePlayerCount(gameId) != 1) {
+            throw new IllegalStateException("加入房间失败");
         }
-        return game;
+
+        return getRoomDetail(gameId);
     }
-
-
-
 
     @Transactional
     public GameRoundOverviewResponse startGame(long userId, long gameId) {
@@ -147,35 +114,23 @@ public class GameService {
         if (!"WAITING".equals(game.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "对局已经开始或解散"
+                    "游戏已经开始或房间已经解散"
             );
         }
 
-        Long ownerUserId = gameMapper.findOwnerUserId(gameId);
-
-        if (ownerUserId == null || ownerUserId.longValue() != userId) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "只有1号座位玩家可以开始游戏"
-            );
-        }
+        requireOwner(userId, gameId);
 
         List<GamePlayer> activePlayers =
                 gamePlayerMapper.findActivePlayers(gameId);
-//        目前阶段可以单人开始
-//        if (activePlayers.size() < 2 || activePlayers.size() > 4) {
-//            throw new ResponseStatusException(
-//                    HttpStatus.CONFLICT,
-//                    "游戏必须有2至4名玩家"
-//            );
-//        }
 
-        int updated = gameMapper.startGame(
-                gameId,
-                activePlayers.size()
-        );
+        if (activePlayers.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "房间内没有可用玩家"
+            );
+        }
 
-        if (updated != 1) {
+        if (gameMapper.startGame(gameId, activePlayers.size()) != 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "游戏已经开始"
@@ -187,68 +142,136 @@ public class GameService {
                 activePlayers.size()
         );
 
-        return gameRoundOverviewService.getOverview(
-                userId,
-                gameId
-        );
+        return gameRoundOverviewService.getOverview(userId, gameId);
     }
 
-
     @Transactional
-    public Game abortGame(long id,long gameId){
+    public RoomAndPlayers abortGame(long userId, long gameId) {
         Game game = findGame(gameId);
 
-        if (!Objects.equals(game.getStatus(), "WAITING")){
+        if (!"WAITING".equals(game.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "对局已经开始/解散"
-            );}
-        if (findOwnerUserId(gameId) != id){
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "只有1号座位玩家可以解散房间"
+                    "只有等待中的房间可以解散"
             );
         }
-        gameMapper.abortGame(gameId);
-        gameMapper.playersdismiss(gameId);
-        return gameMapper.Findbygame(gameId);
 
+        requireOwner(userId, gameId);
+        abortWaitingGameWithoutOwnerCheck(gameId);
+        return getRoomDetail(gameId);
+    }
 
-        }
+    /**
+     * 房主创建新房间前，自动解散自己仍处于 WAITING 的旧房间。
+     */
     @Transactional
-    public String leaveGame(long userId,long gameId){
-        if(gameMapper.playerLeft(userId,gameId) == 1){
+    public void abortOwnedWaitingRooms(long userId) {
+        List<Long> gameIds =
+                gameMapper.findWaitingGameIdsOwnedByUser(userId);
 
-            gameMapper.decreasePlayerCount(gameId);
-            return "退出成功";
+        for (Long gameId : gameIds) {
+            abortWaitingGameWithoutOwnerCheck(gameId);
         }
-        else{
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "玩家不存在此房间，退出失败");
-        }
-
     }
 
-    public long findOwnerUserId(long gameId) {
-        Long userId = gameMapper.findOwnerUserId(gameId);
+    @Transactional
+    public void leaveGame(long userId, long gameId) {
+        Game game = findGame(gameId);
 
-        if (userId == null) {
+        if (!"WAITING".equals(game.getStatus())) {
             throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "找不到创建者"
+                    HttpStatus.CONFLICT,
+                    "游戏开始后不能离开房间"
             );
         }
 
-        return userId;
+        GamePlayer player =
+                gameMapper.findActivePlayer(userId, gameId);
+
+        if (player == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "当前用户不在这个房间中"
+            );
+        }
+
+        if (player.getSeatNo() != null
+                && player.getSeatNo() == 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "房主不能直接离开，请解散房间"
+            );
+        }
+
+        if (gameMapper.playerLeft(userId, gameId) != 1) {
+            throw new IllegalStateException("离开房间失败");
+        }
+
+        gameMapper.decreasePlayerCount(gameId);
     }
 
-    public RoomAndPlayers getRoomDetail(long gameId){
+    public RoomAndPlayers getRoomDetail(long gameId) {
         RoomAndPlayers roomAndPlayers = new RoomAndPlayers();
         roomAndPlayers.setGame(findGame(gameId));
-        roomAndPlayers.setPlayerlist(gameMapper.findPlayersInRoom(gameId));
+        roomAndPlayers.setPlayerlist(
+                gameMapper.findPlayersInRoom(gameId)
+        );
         return roomAndPlayers;
     }
 
+    public boolean hasMembership(long userId, long gameId) {
+        return gameMapper.countMembership(userId, gameId) > 0;
+    }
 
+    public List<ActiveGameItem> getActiveGames(long userId) {
+        return gameMapper.findActiveGamesForUser(userId);
+    }
+
+    public Game findGame(long gameId) {
+        Game game = gameMapper.findById(gameId);
+        if (game == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "游戏不存在"
+            );
+        }
+        return game;
+    }
+
+    private void requireUser(long userId) {
+        if (authMapper.findById(userId) == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "用户不存在"
+            );
+        }
+    }
+
+    private void requireOwner(long userId, long gameId) {
+        Long ownerUserId = gameMapper.findOwnerUserId(gameId);
+
+        if (ownerUserId == null
+                || ownerUserId.longValue() != userId) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "只有房主可以执行这个操作"
+            );
+        }
+    }
+
+    private int findAvailableSeat(List<Integer> occupiedSeats) {
+        for (int seat = 1; seat <= MAX_PLAYERS; seat++) {
+            if (!occupiedSeats.contains(seat)) {
+                return seat;
+            }
+        }
+        return 0;
+    }
+
+    private void abortWaitingGameWithoutOwnerCheck(long gameId) {
+        int updated = gameMapper.abortGame(gameId);
+        if (updated == 1) {
+            gameMapper.playersdismiss(gameId);
+        }
+    }
 }

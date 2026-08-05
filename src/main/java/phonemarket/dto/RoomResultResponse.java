@@ -2,21 +2,17 @@ package phonemarket.dto;
 
 import lombok.Data;
 
+/**
+ * 创建、加入、查询、开始、离开和解散房间的统一返回对象。
+ */
 @Data
 public class RoomResultResponse {
-
-    /**
-     * 请求是否成功
-     */
     private boolean success;
-
-    /**
-     * 返回给前端的提示信息
-     */
     private String message;
+    private RoomAndPlayers roomAndPlayers;
 
     /**
-     * 房间详细信息
+     * 前端下一步建议进入的页面，例如 /room.html?gameId=1。
      */
-    private RoomAndPlayers roomAndPlayers;
+    private String redirectUrl;
 }

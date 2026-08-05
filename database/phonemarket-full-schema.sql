@@ -1,3 +1,7 @@
+-- PhoneMarket complete schema
+-- Updated: 2026-08-05
+-- Business additions: session rooms, active-game list and 20-minute inactivity timeout.
+
 
 
 
@@ -39,8 +43,16 @@ CREATE TABLE game (
     max_round INT NOT NULL DEFAULT 10,
     player_count INT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME NULL
+        COMMENT 'Time when the owner started the game',
+    last_activity_at DATETIME NULL
+        COMMENT 'Reset after every successful round submission',
+    finished_at DATETIME NULL,
+    finished_reason VARCHAR(40) NULL
+        COMMENT 'NORMAL, INACTIVITY_TIMEOUT or OWNER_ABORTED',
     PRIMARY KEY (id),
     KEY idx_game_status (status),
+    KEY idx_game_status_activity (status, last_activity_at),
     CONSTRAINT chk_game_status
         CHECK (status IN ('WAITING', 'RUNNING', 'FINISHED', 'ABORTED')),
     CONSTRAINT chk_game_current_round CHECK (current_round >= 1),
