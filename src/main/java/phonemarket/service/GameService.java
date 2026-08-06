@@ -1,5 +1,6 @@
 package phonemarket.service;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,16 @@ import phonemarket.mapper.GamePlayerMapper;
 
 import java.util.List;
 
+/**
+ * 游戏和房间的写业务。
+ *
+ * 当前项目是单服务器部署，因此不引入分布式锁。
+ * 并发安全主要依靠：
+ * 1. Spring 事务；
+ * 2. UPDATE 中的状态条件；
+ * 3. 数据库唯一约束；
+ * 4. 房间最多四人的座位检查。
+ */
 @Service
 public class GameService {
 
@@ -25,19 +36,22 @@ public class GameService {
     private final GamePlayerMapper gamePlayerMapper;
     private final RoundInitializationService roundInitializationService;
     private final GameRoundOverviewService gameRoundOverviewService;
+    private final GameQueryService gameQueryService;
 
     public GameService(
             GameMapper gameMapper,
             AuthMapper authMapper,
             GamePlayerMapper gamePlayerMapper,
             RoundInitializationService roundInitializationService,
-            GameRoundOverviewService gameRoundOverviewService
+            GameRoundOverviewService gameRoundOverviewService,
+            GameQueryService gameQueryService
     ) {
         this.gameMapper = gameMapper;
         this.authMapper = authMapper;
         this.gamePlayerMapper = gamePlayerMapper;
         this.roundInitializationService = roundInitializationService;
         this.gameRoundOverviewService = gameRoundOverviewService;
+        this.gameQueryService = gameQueryService;
     }
 
     @Transactional
@@ -64,7 +78,8 @@ public class GameService {
             throw new IllegalStateException("创建房主记录失败");
         }
 
-        return getRoomDetail(game.getId());
+        gameQueryService.evictGameState(game.getId());
+        return gameQueryService.loadRoomDetailFromDatabase(game.getId());
     }
 
     @Transactional
@@ -80,7 +95,7 @@ public class GameService {
         }
 
         if (gameMapper.countPlayer(userId, gameId) > 0) {
-            return getRoomDetail(gameId);
+            return gameQueryService.getRoomDetail(gameId);
         }
 
         List<Integer> occupiedSeats =
@@ -99,12 +114,25 @@ public class GameService {
         player.setUserId(userId);
         player.setSeatNo(availableSeat);
 
-        if (gameMapper.join(player) != 1
-                || gameMapper.increasePlayerCount(gameId) != 1) {
-            throw new IllegalStateException("加入房间失败");
+        try {
+            if (gameMapper.join(player) != 1
+                    || gameMapper.increasePlayerCount(gameId) != 1) {
+                throw new IllegalStateException("加入房间失败");
+            }
+        } catch (DuplicateKeyException exception) {
+            /*
+             * 单机环境仍可能同时收到两个加入请求。
+             * 数据库唯一索引负责最终兜底，事务会自动回滚。
+             */
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "房间状态已经变化，请重新尝试加入",
+                    exception
+            );
         }
 
-        return getRoomDetail(gameId);
+        gameQueryService.evictGameState(gameId);
+        return gameQueryService.loadRoomDetailFromDatabase(gameId);
     }
 
     @Transactional
@@ -130,6 +158,10 @@ public class GameService {
             );
         }
 
+        /*
+         * WHERE status = 'WAITING' 是单机并发下的重要保护：
+         * 即使用户连续点击，也只有第一次 UPDATE 能成功。
+         */
         if (gameMapper.startGame(gameId, activePlayers.size()) != 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -142,6 +174,7 @@ public class GameService {
                 activePlayers.size()
         );
 
+        gameQueryService.evictGameState(gameId);
         return gameRoundOverviewService.getOverview(userId, gameId);
     }
 
@@ -158,7 +191,7 @@ public class GameService {
 
         requireOwner(userId, gameId);
         abortWaitingGameWithoutOwnerCheck(gameId);
-        return getRoomDetail(gameId);
+        return gameQueryService.loadRoomDetailFromDatabase(gameId);
     }
 
     /**
@@ -208,15 +241,21 @@ public class GameService {
         }
 
         gameMapper.decreasePlayerCount(gameId);
+        gameQueryService.evictGameState(gameId);
     }
 
+    /**
+     * 普通页面查询走 Redis 缓存。
+     */
     public RoomAndPlayers getRoomDetail(long gameId) {
-        RoomAndPlayers roomAndPlayers = new RoomAndPlayers();
-        roomAndPlayers.setGame(findGame(gameId));
-        roomAndPlayers.setPlayerlist(
-                gameMapper.findPlayersInRoom(gameId)
-        );
-        return roomAndPlayers;
+        return gameQueryService.getRoomDetail(gameId);
+    }
+
+    /**
+     * 写操作完成后需要立即返回最新数据时直接查数据库。
+     */
+    public RoomAndPlayers getFreshRoomDetail(long gameId) {
+        return gameQueryService.loadRoomDetailFromDatabase(gameId);
     }
 
     public boolean hasMembership(long userId, long gameId) {
@@ -224,7 +263,7 @@ public class GameService {
     }
 
     public List<ActiveGameItem> getActiveGames(long userId) {
-        return gameMapper.findActiveGamesForUser(userId);
+        return gameQueryService.getActiveGames(userId);
     }
 
     public Game findGame(long gameId) {
@@ -272,6 +311,7 @@ public class GameService {
         int updated = gameMapper.abortGame(gameId);
         if (updated == 1) {
             gameMapper.playersdismiss(gameId);
+            gameQueryService.evictGameState(gameId);
         }
     }
 }

@@ -4,14 +4,10 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/**
- * 正式注册登录使用的用户实体。
- */
 @Data
-public class User {
+public class AppUser {
+
     private Long id;
     private String username;
-    private String nickname;
-    private String passwordHash;
     private LocalDateTime createdAt;
 }

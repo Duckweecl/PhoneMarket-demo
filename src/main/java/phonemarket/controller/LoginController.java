@@ -93,12 +93,12 @@ public class LoginController {
     }
 
     @PutMapping("/username")
-    public AuthResponse updateNickname(
+    public AuthResponse updateUsername(
             @RequestBody UpdateUsernameRequest request,
             HttpSession session
     ) {
         long userId = sessionUserService.requireUserId(session);
-        return authService.updateNickname(userId, request);
+        return authService.updateUsername(userId, request);
     }
 
     @PostMapping("/logout")

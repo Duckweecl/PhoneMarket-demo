@@ -106,19 +106,13 @@ function closeJoinModal() {
 }
 
 function openUsernameModal() {
-    /*
-     * 这里现在修改的是昵称，
-     * 所以输入框预设当前昵称。
-     */
-    elements.newUsername.value =
-        state.nickname || "";
-
+    elements.newUsername.value = state.username || "";
     elements.usernameInputMessage.textContent = "";
     elements.usernameModal.classList.remove("hidden");
-
     elements.newUsername.focus();
     elements.newUsername.select();
 }
+
 function closeUsernameModal() {
     elements.usernameModal.classList.add("hidden");
 }
@@ -288,63 +282,23 @@ async function joinGame(gameId) {
     }
 }
 
-async function updateUsername(nickname) {
+async function updateUsername(username) {
     elements.confirmUsernameButton.disabled = true;
 
-    const newNickname = nickname.trim();
-
     try {
-        const result = await request(
-            API.updateUsername,
-            {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    /*
-                     * 如果后端接收字段仍叫 username，
-                     * 暂时保持这个字段名。
-                     */
-                    username: newNickname
-                })
-            }
-        );
+        const result = await request(API.updateUsername, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({username})
+        });
 
-        /*
-         * 不依赖 result.username。
-         * 直接使用用户刚刚输入的新昵称。
-         */
-        state.nickname = newNickname;
-
-        elements.nicknameText.textContent =
-            newNickname;
-
-        if (elements.welcomeText) {
-            elements.welcomeText.textContent =
-                `欢迎，${newNickname}`;
-        }
-
-        /*
-         * 不修改 usernameText。
-         * @ 后面继续显示原登录用户名。
-         */
-
+        state.username = result.username;
+        elements.usernameText.textContent = `@${result.username}`;
         closeUsernameModal();
-
-        showMessage(
-            "修改成功",
-            result.message || "昵称修改成功"
-        );
-
+        showMessage("修改成功", result.message);
     } catch (error) {
-        if (handleUnauthorized(error)) {
-            return;
-        }
-
-        elements.usernameInputMessage.textContent =
-            error.message || "昵称修改失败";
-
+        if (handleUnauthorized(error)) return;
+        elements.usernameInputMessage.textContent = error.message;
     } finally {
         elements.confirmUsernameButton.disabled = false;
     }
@@ -405,6 +359,10 @@ elements.usernameForm.addEventListener("submit", event => {
     event.preventDefault();
     const username = elements.newUsername.value.trim();
 
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username)) {
+        elements.usernameInputMessage.textContent = "用户名格式不正确";
+        return;
+    }
 
     elements.usernameInputMessage.textContent = "";
     updateUsername(username);

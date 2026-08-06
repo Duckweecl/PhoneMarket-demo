@@ -82,7 +82,7 @@ public class HomeService {
 
         return roomSuccess(
                 "游戏开始成功",
-                gameService.getRoomDetail(gameId),
+                gameService.getFreshRoomDetail(gameId),
                 gameUrl(gameId)
         );
     }

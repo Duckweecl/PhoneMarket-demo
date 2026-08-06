@@ -13,14 +13,23 @@ import phonemarket.mapper.GameMapper;
 public class GameTimeoutService {
 
     private final GameMapper gameMapper;
+    private final GameQueryService gameQueryService;
 
-    public GameTimeoutService(GameMapper gameMapper) {
+    public GameTimeoutService(
+            GameMapper gameMapper,
+            GameQueryService gameQueryService
+    ) {
         this.gameMapper = gameMapper;
+        this.gameQueryService = gameQueryService;
     }
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     @Transactional
     public void closeInactiveGames() {
-        gameMapper.expireInactiveRunningGames();
+        int updatedRows = gameMapper.expireInactiveRunningGames();
+
+        if (updatedRows > 0) {
+            gameQueryService.evictAllGameCaches();
+        }
     }
 }
